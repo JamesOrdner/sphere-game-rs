@@ -109,9 +109,6 @@ impl Engine {
     }
 
     fn render(&mut self) {
-        // simulate vsync
-        std::thread::sleep(std::time::Duration::from_millis(15));
-
         let physics_system = &mut self.physics_system;
         let graphics_system = self.graphics_system.as_mut().unwrap();
 
@@ -147,7 +144,7 @@ impl Engine {
         self.graphics_system
             .as_mut()
             .unwrap()
-            .create_component(entity_id);
+            .create_static_mesh_component(entity_id, "cube");
         self.entities.push(entity_id);
     }
 
@@ -157,7 +154,7 @@ impl Engine {
             self.graphics_system
                 .as_mut()
                 .unwrap()
-                .destroy_component(entity_id);
+                .destroy_static_mesh_component(entity_id);
         }
     }
 }

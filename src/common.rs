@@ -22,23 +22,27 @@ impl<T> ComponentArray<T> {
         }
     }
 
-    pub fn push(&mut self, entity_id: EntityID, data: T) -> &mut DataEntry<T> {
+    pub fn push(&mut self, entity_id: EntityID, data: T) -> &mut T {
         debug_assert!(!self.map.contains_key(&entity_id));
         self.map.insert(entity_id, self.data.len());
         self.data.push(DataEntry::<T> { data, entity_id });
-        self.data.last_mut().unwrap()
+        &mut self.data.last_mut().unwrap().data
     }
 
-    pub fn remove(&mut self, entity_id: EntityID) {
+    pub fn remove(&mut self, entity_id: EntityID) -> T {
         debug_assert!(self.map.contains_key(&entity_id));
         let index = self.map[&entity_id];
         self.map.remove(&entity_id);
-        self.data.remove(index);
         for entry in &mut self.map {
             if *entry.1 > index {
                 *entry.1 -= 1;
             }
         }
+        self.data.remove(index).data
+    }
+
+    pub fn len(&self) -> usize {
+        self.data.len()
     }
 }
 
