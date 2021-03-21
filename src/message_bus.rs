@@ -1,8 +1,14 @@
 use crate::common::EntityID;
+use nalgebra_glm as glm;
 
 pub enum Message {
-    Location { entity_id: EntityID, x: f32, y: f32 },
-    InputAcceleration { x: f32, y: f32 },
+    Location {
+        entity_id: EntityID,
+        location: glm::Vec3,
+    },
+    InputAcceleration {
+        acceleration: glm::Vec2,
+    },
 }
 
 pub trait Receiver {

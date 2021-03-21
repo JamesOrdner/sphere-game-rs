@@ -2,12 +2,11 @@ use crate::common::{ComponentArray, EntityID};
 use crate::engine::UPDATE_INTERVAL;
 use crate::message_bus::Message;
 use crate::thread_pool::Scope;
+use nalgebra_glm as glm;
 
 struct ComponentData {
-    location_x: f32,
-    location_y: f32,
-    velocity_x: f32,
-    velocity_y: f32,
+    location: glm::Vec3,
+    velocity: glm::Vec3,
 }
 
 pub struct PhysicsSystem {
@@ -27,10 +26,8 @@ impl super::Componentable for PhysicsSystem {
         self.component_array.push(
             entity_id,
             ComponentData {
-                location_x: 0.0,
-                location_y: 0.0,
-                velocity_x: 0.0,
-                velocity_y: 0.0,
+                location: glm::Vec3::zeros(),
+                velocity: glm::Vec3::zeros(),
             },
         );
     }
@@ -44,15 +41,11 @@ impl super::Updatable for PhysicsSystem {
     fn update(&mut self, thread_pool_scope: &Scope) {
         for component in &mut self.component_array {
             thread_pool_scope.execute(|message_bus_sender| {
-                component.data.location_x +=
-                    component.data.velocity_x * UPDATE_INTERVAL.as_secs_f32();
-                component.data.location_y +=
-                    component.data.velocity_y * UPDATE_INTERVAL.as_secs_f32();
+                component.data.location += component.data.velocity * UPDATE_INTERVAL.as_secs_f32();
 
                 message_bus_sender.push(Message::Location {
                     entity_id: component.entity_id,
-                    x: component.data.location_x,
-                    y: component.data.location_y,
+                    location: component.data.location,
                 });
             });
         }
@@ -67,10 +60,10 @@ impl crate::message_bus::Receiver for PhysicsSystem {
     fn receive(&mut self, messages: &[Message]) {
         for message in messages {
             match message {
-                Message::InputAcceleration { x, y } => {
+                Message::InputAcceleration { acceleration } => {
                     for component in &mut self.component_array {
-                        component.data.velocity_x = *x;
-                        component.data.velocity_y = *y;
+                        component.data.velocity.x = acceleration.x;
+                        component.data.velocity.y = acceleration.y;
                     }
                 }
                 _ => {}

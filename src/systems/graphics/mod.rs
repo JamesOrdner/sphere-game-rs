@@ -146,10 +146,12 @@ impl crate::message_bus::Receiver for GraphicsSystem {
     fn receive(&mut self, messages: &[Message]) {
         for message in messages {
             match message {
-                Message::Location { entity_id, x, y } => {
+                Message::Location {
+                    entity_id,
+                    location,
+                } => {
                     let component_data = &mut self.component_array[*entity_id].data;
-                    component_data.location.x = *x;
-                    component_data.location.y = *y;
+                    component_data.location = *location;
                 }
                 _ => {}
             }
