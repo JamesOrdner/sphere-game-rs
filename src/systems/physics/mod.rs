@@ -1,5 +1,6 @@
-use crate::common::{ComponentArray, EntityID};
+use crate::common::ComponentArray;
 use crate::engine::UPDATE_INTERVAL;
+use crate::entity::EntityID;
 use crate::message_bus::Message;
 use crate::thread_pool::Scope;
 use nalgebra_glm as glm;
@@ -19,10 +20,8 @@ impl PhysicsSystem {
             component_array: ComponentArray::new(),
         }
     }
-}
 
-impl super::Componentable for PhysicsSystem {
-    fn create_component(&mut self, entity_id: EntityID) {
+    pub fn create_component(&mut self, entity_id: EntityID) {
         self.component_array.push(
             entity_id,
             ComponentData {
@@ -32,7 +31,7 @@ impl super::Componentable for PhysicsSystem {
         );
     }
 
-    fn destroy_component(&mut self, entity_id: EntityID) {
+    pub fn destroy_component(&mut self, entity_id: EntityID) {
         self.component_array.remove(entity_id);
     }
 }
@@ -53,7 +52,7 @@ impl super::Updatable for PhysicsSystem {
 }
 
 impl super::Renderable for PhysicsSystem {
-    fn render(&mut self, _thread_pool_scope: &Scope) {}
+    fn render(&mut self, _thread_pool_scope: &Scope, _delta_time: f32) {}
 }
 
 impl crate::message_bus::Receiver for PhysicsSystem {

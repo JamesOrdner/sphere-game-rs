@@ -1,4 +1,4 @@
-use crate::common::EntityID;
+use crate::entity::EntityID;
 use nalgebra_glm as glm;
 
 pub enum Message {

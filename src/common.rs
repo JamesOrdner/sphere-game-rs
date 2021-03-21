@@ -1,8 +1,8 @@
+use crate::entity::EntityID;
 use std::{
     collections::HashMap,
     ops::{Index, IndexMut},
 };
-pub type EntityID = u16;
 
 pub struct DataEntry<T> {
     pub data: T,

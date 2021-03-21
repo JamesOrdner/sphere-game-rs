@@ -1,6 +1,7 @@
 mod vulkan;
 
-use crate::common::{ComponentArray, EntityID};
+use crate::common::ComponentArray;
+use crate::entity::EntityID;
 use crate::message_bus::Message;
 use crate::thread_pool::Scope;
 use nalgebra_glm as glm;
@@ -8,8 +9,13 @@ use vulkan::mesh::Mesh;
 use vulkan::InstanceData;
 use winit::window::Window;
 
-struct ComponentData {
+struct StaticMeshComponent {
     loaded_mesh_index: Option<usize>,
+    location: glm::Vec3,
+}
+
+struct CameraComponent {
+    entity_id: EntityID,
     location: glm::Vec3,
 }
 
@@ -20,19 +26,38 @@ struct LoadedMesh {
 }
 
 pub struct GraphicsSystem {
-    component_array: ComponentArray<ComponentData>,
+    static_mesh_components: ComponentArray<StaticMeshComponent>,
+    camera_component: Option<CameraComponent>,
     vulkan: vulkan::Vulkan,
     loaded_meshes: Vec<LoadedMesh>,
 }
 
 impl GraphicsSystem {
-    pub fn new(event_loop: &winit::event_loop::EventLoop<()>) -> Self {
-        let window = Window::new(&event_loop).unwrap();
+    pub fn new(window: Window) -> Self {
         GraphicsSystem {
-            component_array: ComponentArray::new(),
+            static_mesh_components: ComponentArray::new(),
+            camera_component: None,
             vulkan: vulkan::Vulkan::new(window),
             loaded_meshes: Vec::new(),
         }
+    }
+
+    pub fn create_camera_component(&mut self, entity_id: EntityID) {
+        debug_assert!(self.camera_component.is_none());
+
+        self.camera_component = Some(CameraComponent {
+            entity_id,
+            location: glm::Vec3::zeros(),
+        });
+    }
+
+    pub fn destroy_camera_component(&mut self, entity_id: EntityID) {
+        debug_assert!(
+            self.camera_component.is_some()
+                && self.camera_component.as_ref().unwrap().entity_id == entity_id
+        );
+
+        self.camera_component = None;
     }
 
     pub fn create_static_mesh_component(&mut self, entity_id: EntityID, mesh_name: &str) {
@@ -49,9 +74,9 @@ impl GraphicsSystem {
             None => None,
         };
 
-        self.component_array.push(
+        self.static_mesh_components.push(
             entity_id,
-            ComponentData {
+            StaticMeshComponent {
                 loaded_mesh_index,
                 location: glm::Vec3::zeros(),
             },
@@ -59,7 +84,7 @@ impl GraphicsSystem {
     }
 
     pub fn destroy_static_mesh_component(&mut self, entity_id: EntityID) {
-        let component_data = self.component_array.remove(entity_id);
+        let component_data = self.static_mesh_components.remove(entity_id);
         if let Some(loaded_mesh_index) = component_data.loaded_mesh_index {
             debug_assert!(self.loaded_meshes[loaded_mesh_index].ref_count > 0);
             self.loaded_meshes[loaded_mesh_index].ref_count -= 1;
@@ -110,7 +135,7 @@ impl GraphicsSystem {
 }
 
 impl super::Renderable for GraphicsSystem {
-    fn render(&mut self, _thread_pool_scope: &Scope) {
+    fn render(&mut self, _thread_pool_scope: &Scope, _delta_time: f32) {
         self.vulkan.begin_instance_update();
 
         let proj_matrix = glm::ortho_rh_zo(-2.0, 2.0, 2.0, -2.0, -2.0, 2.0);
@@ -122,7 +147,7 @@ impl super::Renderable for GraphicsSystem {
         });
 
         let identity = glm::Mat4::identity();
-        for (component_index, component) in self.component_array.into_iter().enumerate() {
+        for (component_index, component) in self.static_mesh_components.into_iter().enumerate() {
             self.vulkan.update_instance(
                 component_index,
                 &InstanceData {
@@ -131,7 +156,7 @@ impl super::Renderable for GraphicsSystem {
             );
         }
 
-        for (component_index, component) in self.component_array.into_iter().enumerate() {
+        for (component_index, component) in self.static_mesh_components.into_iter().enumerate() {
             if let Some(loaded_mesh_index) = component.data.loaded_mesh_index {
                 let vertex_buffer = &self.loaded_meshes[loaded_mesh_index].vertex_buffer;
                 self.vulkan.draw_instance(component_index, vertex_buffer);
@@ -150,8 +175,8 @@ impl crate::message_bus::Receiver for GraphicsSystem {
                     entity_id,
                     location,
                 } => {
-                    let component_data = &mut self.component_array[*entity_id].data;
-                    component_data.location = *location;
+                    // let component_data = &mut self.static_mesh_components[*entity_id].data;
+                    // component_data.location = *location;
                 }
                 _ => {}
             }

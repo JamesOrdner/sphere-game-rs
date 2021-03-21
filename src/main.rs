@@ -1,12 +1,12 @@
+use engine::Engine;
+use std::vec::Vec;
+
 mod common;
 mod engine;
+mod entity;
 mod message_bus;
 mod systems;
 mod thread_pool;
-
-use engine::Engine;
-
-use std::vec::Vec;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
