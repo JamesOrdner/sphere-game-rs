@@ -48,7 +48,7 @@ impl InputSystem {
 
     fn handle_keypress(&mut self, scancode: ScanCode, state: ElementState) {
         match scancode {
-            13 => {
+            13 | 17 => {
                 if state == ElementState::Pressed {
                     self.input_acceleration_y = 1.0;
                     self.w_held = true;
@@ -61,7 +61,7 @@ impl InputSystem {
                     self.w_held = false;
                 }
             }
-            0 => {
+            0 | 30 => {
                 if state == ElementState::Pressed {
                     self.input_acceleration_x = -1.0;
                     self.a_held = true;
@@ -74,7 +74,7 @@ impl InputSystem {
                     self.a_held = false;
                 }
             }
-            1 => {
+            1 | 31 => {
                 if state == ElementState::Pressed {
                     self.input_acceleration_y = -1.0;
                     self.s_held = true;
@@ -87,7 +87,7 @@ impl InputSystem {
                     self.s_held = false;
                 }
             }
-            2 => {
+            2 | 32 => {
                 if state == ElementState::Pressed {
                     self.input_acceleration_x = 1.0;
                     self.d_held = true;

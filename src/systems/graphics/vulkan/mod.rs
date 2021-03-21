@@ -29,6 +29,7 @@ pub use pipeline_layouts::SceneData;
 /// VulkanInfo contains constant data which will not be mutated during the lifetime of an instance
 pub struct VulkanInfo {
     _window: Window,
+    _entry: ash::Entry,
     instance: ash::Instance,
     surface_loader: khr::Surface,
     surface: vk::SurfaceKHR,
@@ -59,7 +60,7 @@ pub struct Vulkan {
 
 impl Vulkan {
     pub fn new(window: Window) -> Self {
-        let (instance, surface_loader, surface) = instance::new(&window);
+        let (entry, instance, surface_loader, surface) = instance::new(&window);
         let (physical_device, device, device_queues) =
             device::new(&instance, &surface_loader, surface);
         let descriptor_set_layouts = DescriptorSetLayouts::new(&device);
@@ -67,6 +68,7 @@ impl Vulkan {
 
         let vulkan_info = VulkanInfo {
             _window: window,
+            _entry: entry,
             instance,
             surface_loader,
             surface,
@@ -224,10 +226,11 @@ impl Vulkan {
             .bind_vertex_buffer(&self.info, frame_info.command_buffer, vertex_buffer);
 
         unsafe {
-            self.info.device.cmd_draw(
+            self.info.device.cmd_draw_indexed(
                 frame_info.command_buffer,
                 vertex_buffer.index_count,
                 1,
+                0,
                 0,
                 0,
             );

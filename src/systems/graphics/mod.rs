@@ -113,13 +113,8 @@ impl super::Renderable for GraphicsSystem {
     fn render(&mut self, _thread_pool_scope: &Scope) {
         self.vulkan.begin_instance_update();
 
-        let proj_matrix = glm::ortho_rh_no(-1.0, 1.0, -1.0, 1.0, -10.0, 10.0);
-        // let view_matrix = glm::Mat4::identity();
-        let view_matrix = glm::look_at(
-            &glm::vec3(0.0, 0.0, 1.0),
-            &glm::Vec3::zeros(),
-            &glm::vec3(0.0, 1.0, 0.0),
-        );
+        let proj_matrix = glm::ortho_rh_zo(-2.0, 2.0, 2.0, -2.0, -2.0, 2.0);
+        let view_matrix = glm::Mat4::identity();
 
         self.vulkan.update_scene(&vulkan::SceneData {
             proj_matrix,

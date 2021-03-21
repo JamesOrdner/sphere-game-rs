@@ -57,7 +57,7 @@ impl Pipeline {
             .width(swapchain.surface_extent.width as f32)
             .height(swapchain.surface_extent.height as f32)
             .min_depth(0.0)
-            .max_depth(0.0)
+            .max_depth(1.0)
             .build()];
 
         let scissors = [vk::Rect2D::builder()
@@ -81,7 +81,7 @@ impl Pipeline {
         let depth_stencil_create_info = vk::PipelineDepthStencilStateCreateInfo::builder()
             .depth_test_enable(true)
             .depth_write_enable(true)
-            .depth_compare_op(vk::CompareOp::LESS)
+            .depth_compare_op(vk::CompareOp::LESS_OR_EQUAL)
             .depth_bounds_test_enable(false)
             .stencil_test_enable(false);
 

@@ -144,7 +144,7 @@ impl Engine {
         self.graphics_system
             .as_mut()
             .unwrap()
-            .create_static_mesh_component(entity_id, "cube");
+            .create_static_mesh_component(entity_id, "suzanne");
         self.entities.push(entity_id);
     }
 

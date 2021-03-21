@@ -239,16 +239,6 @@ impl Allocator {
 
         // return suballocated buffer
 
-        println!("{} {}", mesh.indices.len(), mesh.vertices.len());
-        println!("{} {}", indices_size, vertices_size);
-        println!("{}", self.vertex_buffer_alignment);
-        println!(
-            "{} {} {}",
-            suballocation_index,
-            indices_size,
-            mesh.indices.len()
-        );
-
         VertexBuffer {
             suballocation_index,
             index_offset: 0,

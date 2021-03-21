@@ -7,7 +7,7 @@ use ash::{
 use std::ffi::{CStr, CString};
 use winit::window::Window;
 
-pub fn new(window: &Window) -> (ash::Instance, khr::Surface, vk::SurfaceKHR) {
+pub fn new(window: &Window) -> (ash::Entry, ash::Instance, khr::Surface, vk::SurfaceKHR) {
     let entry = Entry::new().unwrap();
 
     let application_info = vk::ApplicationInfo::builder()
@@ -48,7 +48,7 @@ pub fn new(window: &Window) -> (ash::Instance, khr::Surface, vk::SurfaceKHR) {
             .expect("Vulkan: Could not create surface.")
     };
 
-    (instance, surface_loader, surface)
+    (entry, instance, surface_loader, surface)
 }
 
 pub unsafe fn destroy(vulkan: &VulkanInfo) {
