@@ -103,6 +103,7 @@ impl<'scope> Scope<'scope> {
     {
         *self.thread_pool.num_pending_tasks.lock().unwrap() += 1;
 
+        // safe: Scope::Drop() blocks until all tasks executed in 'scope are complete
         let thunk = unsafe { std::mem::transmute::<Thunk<'scope>, Thunk<'static>>(Box::new(f)) };
         self.thread_pool
             .task_sender
@@ -118,7 +119,7 @@ impl<'scope> Drop for Scope<'scope> {
             .cvar
             .wait_while(
                 self.thread_pool.num_pending_tasks.lock().unwrap(),
-                |num_pending_taskss| *num_pending_taskss > 0,
+                |num_pending_tasks| *num_pending_tasks > 0,
             )
             .unwrap();
     }
