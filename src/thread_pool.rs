@@ -1,9 +1,9 @@
-use crate::message_bus;
+use crate::state_manager::Sender;
 use core::ops::FnOnce;
 use std::sync::{mpsc, Arc, Condvar, Mutex};
 use std::thread;
 
-type Thunk<'a> = Box<dyn FnOnce(&mut message_bus::Sender) + Send + 'a>;
+type Thunk<'a> = Box<dyn FnOnce(&mut Sender) + Send + 'a>;
 
 enum Task {
     Thunk { thunk: Thunk<'static> },
@@ -12,7 +12,7 @@ enum Task {
 
 pub struct ThreadPool {
     threads: Vec<thread::JoinHandle<()>>,
-    message_bus_senders: Vec<message_bus::Sender>,
+    message_bus_senders: Vec<Sender>,
     task_sender: mpsc::SyncSender<Task>,
     num_pending_tasks: Arc<Mutex<usize>>,
     cvar: Arc<Condvar>,
@@ -21,7 +21,7 @@ pub struct ThreadPool {
 impl ThreadPool {
     pub fn new(num_threads: usize) -> Self {
         let mut threads = Vec::with_capacity(num_threads);
-        let mut message_bus_senders = Vec::<message_bus::Sender>::with_capacity(num_threads);
+        let mut message_bus_senders = Vec::<Sender>::with_capacity(num_threads);
 
         let (task_sender, task_receiver) = mpsc::sync_channel(num_threads);
         let shared_receiver = Arc::new(Mutex::new(task_receiver));
@@ -30,7 +30,7 @@ impl ThreadPool {
         let cvar = Arc::new(Condvar::new());
 
         for _ in 0..num_threads {
-            message_bus_senders.push(message_bus::Sender::new());
+            message_bus_senders.push(Sender::new());
         }
 
         for i in 0..num_threads {
@@ -71,11 +71,11 @@ impl ThreadPool {
         f(scope);
     }
 
-    pub fn get_message_bus_senders(&self) -> &[message_bus::Sender] {
+    pub fn get_message_bus_senders(&self) -> &[Sender] {
         self.message_bus_senders.as_slice()
     }
 
-    pub fn get_message_bus_senders_mut(&mut self) -> &mut [message_bus::Sender] {
+    pub fn get_message_bus_senders_mut(&mut self) -> &mut [Sender] {
         self.message_bus_senders.as_mut_slice()
     }
 }
@@ -99,7 +99,7 @@ pub struct Scope<'scope> {
 impl<'scope> Scope<'scope> {
     pub fn execute<F>(&self, f: F)
     where
-        F: FnOnce(&mut message_bus::Sender) + Send + 'scope,
+        F: FnOnce(&mut Sender) + Send + 'scope,
     {
         *self.thread_pool.num_pending_tasks.lock().unwrap() += 1;
 

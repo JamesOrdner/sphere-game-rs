@@ -1,13 +1,10 @@
-mod vulkan;
-
-use crate::common::ComponentArray;
-use crate::entity::EntityID;
-use crate::message_bus::Message;
-use crate::thread_pool::Scope;
+use crate::{common::ComponentArray, components::Component, entity::EntityID, thread_pool::Scope};
 use nalgebra_glm as glm;
 use vulkan::mesh::Mesh;
 use vulkan::InstanceData;
 use winit::window::Window;
+
+mod vulkan;
 
 struct StaticMeshComponent {
     loaded_mesh_index: Option<usize>,
@@ -167,19 +164,13 @@ impl super::Renderable for GraphicsSystem {
     }
 }
 
-impl crate::message_bus::Receiver for GraphicsSystem {
-    fn receive(&mut self, messages: &[Message]) {
-        for message in messages {
-            match message {
-                Message::Location {
-                    entity_id,
-                    location,
-                } => {
-                    // let component_data = &mut self.static_mesh_components[*entity_id].data;
-                    // component_data.location = *location;
-                }
-                _ => {}
+impl crate::state_manager::EventListener for GraphicsSystem {
+    fn receive(&mut self, entity_id: EntityID, component: &Component) {
+        match component {
+            Component::Location(location) => {
+                self.static_mesh_components[entity_id].data.location = *location;
             }
+            _ => {}
         }
     }
 }

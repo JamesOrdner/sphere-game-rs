@@ -1,7 +1,9 @@
-use crate::common::ComponentArray;
+use super::SystemType;
+use crate::components::ComponentType;
 use crate::entity::EntityID;
-use crate::message_bus::Message;
+use crate::state_manager::Event;
 use crate::thread_pool::Scope;
+use crate::{common::ComponentArray, components::Component};
 use nalgebra_glm as glm;
 
 struct CameraComponent {
@@ -41,30 +43,30 @@ impl super::Renderable for CameraSystem {
     fn render(&mut self, thread_pool_scope: &Scope, delta_time: f32) {
         for component in &mut self.camera_components {
             thread_pool_scope.execute(|message_bus_sender| {
-                component.data.velocity += glm::vec2_to_vec3(&component.data.acceleration) * delta_time;
+                component.data.velocity +=
+                    glm::vec2_to_vec3(&component.data.acceleration) * delta_time;
                 component.data.velocity *= 1.0 - delta_time;
                 component.data.location += component.data.velocity * delta_time;
 
-                message_bus_sender.push(Message::Location {
+                message_bus_sender.push(Event {
                     entity_id: component.entity_id,
-                    location: component.data.location,
+                    component_type: ComponentType::Location,
+                    system: SystemType::Camera,
                 });
             });
         }
     }
 }
 
-impl crate::message_bus::Receiver for CameraSystem {
-    fn receive(&mut self, messages: &[Message]) {
-        for message in messages {
-            match message {
-                Message::InputAcceleration { acceleration } => {
-                    for component in &mut self.camera_components {
-                        component.data.acceleration = *acceleration;
-                    }
+impl crate::state_manager::EventListener for CameraSystem {
+    fn receive(&mut self, _entity_id: EntityID, component: &Component) {
+        match component {
+            Component::InputAcceleration(acceleration) => {
+                for component in &mut self.camera_components {
+                    component.data.acceleration = *acceleration;
                 }
-                _ => {}
             }
+            _ => {}
         }
     }
 }

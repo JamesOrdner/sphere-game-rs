@@ -1,9 +1,15 @@
-use crate::message_bus::{Message, Sender};
+use super::SystemType;
+use crate::{
+    components::{ComponentRef, ComponentType, InputAcceleration},
+    entity::EntityID,
+    state_manager::ComponentQueryable,
+    state_manager::{Event, Sender},
+};
 use nalgebra_glm as glm;
-use winit::event::{ElementState, Event, ScanCode, WindowEvent};
+use winit::event::{ElementState, Event as InputEvent, ScanCode, WindowEvent};
 
 pub struct InputSystem {
-    input_acceleration: glm::Vec2,
+    input_acceleration: InputAcceleration,
     w_held: bool,
     a_held: bool,
     s_held: bool,
@@ -21,9 +27,9 @@ impl InputSystem {
         }
     }
 
-    pub fn handle_input(&mut self, event: Event<()>) {
+    pub fn handle_input(&mut self, event: InputEvent<()>) {
         match event {
-            Event::WindowEvent {
+            InputEvent::WindowEvent {
                 event:
                     WindowEvent::KeyboardInput {
                         input,
@@ -39,8 +45,10 @@ impl InputSystem {
     }
 
     pub fn flush_input(&self, message_sender: &mut Sender) {
-        message_sender.push(Message::InputAcceleration {
-            acceleration: self.input_acceleration,
+        message_sender.push(Event {
+            entity_id: 0,
+            component_type: ComponentType::InputAcceleration,
+            system: SystemType::Input,
         });
     }
 
@@ -100,5 +108,16 @@ impl InputSystem {
             }
             _ => {}
         };
+    }
+}
+
+impl ComponentQueryable for InputSystem {
+    fn get(&self, component_type: ComponentType, _entity_id: EntityID) -> Option<ComponentRef> {
+        match component_type {
+            ComponentType::InputAcceleration => {
+                Some(ComponentRef::InputAcceleration(&self.input_acceleration))
+            }
+            _ => None,
+        }
     }
 }

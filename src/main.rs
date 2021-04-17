@@ -2,9 +2,10 @@ use engine::Engine;
 use std::vec::Vec;
 
 mod common;
+mod components;
 mod engine;
 mod entity;
-mod message_bus;
+mod state_manager;
 mod systems;
 mod thread_pool;
 
