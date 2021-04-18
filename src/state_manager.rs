@@ -30,7 +30,7 @@ pub struct StateManager;
 
 impl StateManager {
     pub fn new() -> Self {
-        StateManager {}
+        Self {}
     }
 
     pub fn distribute(&self, senders: &mut [Sender], systems: &mut Systems) {

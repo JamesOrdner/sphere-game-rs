@@ -1,4 +1,6 @@
-use crate::{vulkan, common::ComponentArray, components::Component, entity::EntityID, thread_pool::Scope};
+use crate::{
+    common::ComponentArray, components::Component, entity::EntityID, thread_pool::Scope, vulkan,
+};
 use nalgebra_glm as glm;
 use vulkan::mesh::Mesh;
 use vulkan::InstanceData;
@@ -106,6 +108,8 @@ impl StaticMeshSystem {
 
 impl crate::state_manager::Listener for StaticMeshSystem {
     fn receive(&mut self, entity_id: EntityID, component: &Component) {
+        if !self.components.contains_entity(entity_id) { return }
+
         match component {
             Component::Location(location) => {
                 self.components[entity_id].data.location = *location;

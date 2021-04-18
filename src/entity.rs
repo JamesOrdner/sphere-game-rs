@@ -32,8 +32,6 @@ fn destroy_static_mesh(entity_id: EntityID, systems: &mut Systems) {
     systems.core.physics.destroy_component(entity_id);
 
     if let Some(client_systems) = &mut systems.client {
-        client_systems
-            .static_mesh
-            .destroy_component(entity_id);
+        client_systems.static_mesh.destroy_component(entity_id);
     }
 }

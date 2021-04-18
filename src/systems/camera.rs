@@ -13,18 +13,18 @@ struct CameraComponent {
 }
 
 pub struct CameraSystem {
-    camera_components: ComponentArray<CameraComponent>,
+    data: ComponentArray<CameraComponent>,
 }
 
 impl CameraSystem {
     pub fn new() -> Self {
         CameraSystem {
-            camera_components: ComponentArray::new(),
+            data: ComponentArray::new(),
         }
     }
 
     pub fn create_component(&mut self, entity_id: EntityID) {
-        self.camera_components.push(
+        self.data.push(
             entity_id,
             CameraComponent {
                 location: glm::vec3(0.0, 0.0, 5.0),
@@ -35,13 +35,13 @@ impl CameraSystem {
     }
 
     pub fn destroy_component(&mut self, entity_id: EntityID) {
-        self.camera_components.remove(entity_id);
+        self.data.remove(entity_id);
     }
 }
 
 impl super::Renderable for CameraSystem {
     fn render(&mut self, thread_pool_scope: &Scope, delta_time: f32) {
-        for component in &mut self.camera_components {
+        for component in &mut self.data {
             thread_pool_scope.execute(|state_manager_sender| {
                 component.data.velocity +=
                     glm::vec2_to_vec3(&component.data.acceleration) * delta_time;
@@ -59,10 +59,12 @@ impl super::Renderable for CameraSystem {
 }
 
 impl crate::state_manager::Listener for CameraSystem {
-    fn receive(&mut self, _entity_id: EntityID, component: &Component) {
+    fn receive(&mut self, entity_id: EntityID, component: &Component) {
+        if !self.data.contains_entity(entity_id) { return }
+
         match component {
             Component::InputAcceleration(acceleration) => {
-                for component in &mut self.camera_components {
+                for component in &mut self.data {
                     component.data.acceleration = *acceleration;
                 }
             }

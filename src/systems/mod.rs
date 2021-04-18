@@ -1,8 +1,8 @@
 use crate::{components::Component, entity::EntityID, state_manager::Listener, thread_pool::Scope};
 use camera::CameraSystem;
-use static_mesh::StaticMeshSystem;
 use input::InputSystem;
 use physics::PhysicsSystem;
+use static_mesh::StaticMeshSystem;
 use winit::window::Window;
 
 pub mod camera;
@@ -70,6 +70,21 @@ impl Systems {
             core: CoreSystems::new(),
             client: Some(ClientSystems::new(window)),
         }
+    }
+
+    pub fn update(&mut self, thread_pool_scope: &Scope) {
+        let core = &mut self.core;
+
+        core.physics.update(&thread_pool_scope);
+    }
+
+    pub fn render(&mut self, thread_pool_scope: &Scope, delta_time: f32) {
+        let core = &mut self.core;
+        let client = self.client.as_mut().unwrap();
+
+        core.physics.render(&thread_pool_scope, delta_time);
+        client.camera.render(&thread_pool_scope, delta_time);
+        client.static_mesh.render(&thread_pool_scope, delta_time);
     }
 
     pub fn receive_for_each_listener(&mut self, entity_id: EntityID, component: &Component) {

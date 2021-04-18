@@ -44,6 +44,10 @@ impl<T> ComponentArray<T> {
     pub fn len(&self) -> usize {
         self.data.len()
     }
+
+    pub fn contains_entity(&self, entity_id: EntityID) -> bool {
+        self.map.contains_key(&entity_id)
+    }
 }
 
 impl<T> Index<EntityID> for ComponentArray<T> {

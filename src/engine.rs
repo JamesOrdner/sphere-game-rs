@@ -102,28 +102,18 @@ impl Engine {
             self.last_update += UPDATE_INTERVAL;
 
             let systems = &mut self.systems;
-
             self.thread_pool.scoped(|thread_pool_scope| {
-                systems.core.physics.update(&thread_pool_scope);
+                systems.update(&thread_pool_scope);
             });
         }
     }
 
     fn render(&mut self) {
-        let core_systems = &mut self.systems.core;
-        let client_systems = &mut self.systems.client;
-
         let delta_time = 1.0 / 60.0; // TODO
 
+        let systems = &mut self.systems;
         self.thread_pool.scoped(|thread_pool_scope| {
-            core_systems.physics.render(&thread_pool_scope, delta_time);
-
-            if let Some(client_systems) = client_systems {
-                client_systems.camera.render(&thread_pool_scope, delta_time);
-                client_systems
-                    .static_mesh
-                    .render(&thread_pool_scope, delta_time);
-            }
+            systems.render(&thread_pool_scope, delta_time);
         });
     }
 

@@ -15,18 +15,18 @@ struct ComponentData {
 }
 
 pub struct PhysicsSystem {
-    component_array: ComponentArray<ComponentData>,
+    data: ComponentArray<ComponentData>,
 }
 
 impl PhysicsSystem {
     pub fn new() -> Self {
         PhysicsSystem {
-            component_array: ComponentArray::new(),
+            data: ComponentArray::new(),
         }
     }
 
     pub fn create_component(&mut self, entity_id: EntityID) {
-        self.component_array.push(
+        self.data.push(
             entity_id,
             ComponentData {
                 location: glm::Vec3::zeros(),
@@ -36,15 +36,17 @@ impl PhysicsSystem {
     }
 
     pub fn destroy_component(&mut self, entity_id: EntityID) {
-        self.component_array.remove(entity_id);
+        self.data.remove(entity_id);
     }
 }
 
 impl Listener for PhysicsSystem {
-    fn receive(&mut self, _entity_id: EntityID, component: &Component) {
+    fn receive(&mut self, entity_id: EntityID, component: &Component) {
+        if !self.data.contains_entity(entity_id) { return }
+
         match component {
             Component::InputAcceleration(acceleration) => {
-                for component in &mut self.component_array {
+                for component in &mut self.data {
                     component.data.velocity.x = acceleration.x;
                     component.data.velocity.y = acceleration.y;
                 }
@@ -56,7 +58,7 @@ impl Listener for PhysicsSystem {
 
 impl super::Updatable for PhysicsSystem {
     fn update(&mut self, thread_pool_scope: &Scope) {
-        for component in &mut self.component_array {
+        for component in &mut self.data {
             thread_pool_scope.execute(|state_manager_sender| {
                 component.data.location += component.data.velocity * UPDATE_INTERVAL.as_secs_f32();
 
@@ -78,7 +80,7 @@ impl ComponentQuery for PhysicsSystem {
     fn get(&self, component_type: ComponentType, entity_id: EntityID) -> Option<ComponentRef> {
         match component_type {
             ComponentType::Location => Some(ComponentRef::Location(
-                &self.component_array[entity_id].data.location,
+                &self.data[entity_id].data.location,
             )),
             _ => None,
         }
