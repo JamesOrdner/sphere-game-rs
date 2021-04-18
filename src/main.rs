@@ -8,6 +8,7 @@ mod entity;
 mod state_manager;
 mod systems;
 mod thread_pool;
+mod vulkan;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();

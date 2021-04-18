@@ -1,14 +1,14 @@
-use crate::thread_pool::Scope;
+use crate::{components::Component, entity::EntityID, state_manager::Listener, thread_pool::Scope};
 use camera::CameraSystem;
-use graphics::GraphicsSystem;
+use static_mesh::StaticMeshSystem;
 use input::InputSystem;
 use physics::PhysicsSystem;
 use winit::window::Window;
 
 pub mod camera;
-pub mod graphics;
 pub mod input;
 pub mod physics;
+pub mod static_mesh;
 
 pub trait Updatable {
     fn update(&mut self, thread_pool_scope: &Scope);
@@ -20,7 +20,6 @@ pub trait Renderable {
 
 pub enum SystemType {
     Camera,
-    Graphics,
     Input,
     Physics,
 }
@@ -39,15 +38,15 @@ impl CoreSystems {
 
 pub struct ClientSystems {
     pub camera: CameraSystem,
-    pub graphics: GraphicsSystem,
+    pub static_mesh: StaticMeshSystem,
     pub input: InputSystem,
 }
 
 impl ClientSystems {
     fn new(window: Window) -> Self {
-        ClientSystems {
+        Self {
             camera: CameraSystem::new(),
-            graphics: GraphicsSystem::new(window),
+            static_mesh: StaticMeshSystem::new(window),
             input: InputSystem::new(),
         }
     }
@@ -70,6 +69,15 @@ impl Systems {
         Self {
             core: CoreSystems::new(),
             client: Some(ClientSystems::new(window)),
+        }
+    }
+
+    pub fn receive_for_each_listener(&mut self, entity_id: EntityID, component: &Component) {
+        self.core.physics.receive(entity_id, component);
+
+        if let Some(client_systems) = &mut self.client {
+            client_systems.camera.receive(entity_id, component);
+            client_systems.static_mesh.receive(entity_id, component);
         }
     }
 }

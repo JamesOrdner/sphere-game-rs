@@ -2,7 +2,7 @@ use super::SystemType;
 use crate::{
     components::{ComponentRef, ComponentType, InputAcceleration},
     entity::EntityID,
-    state_manager::ComponentQueryable,
+    state_manager::ComponentQuery,
     state_manager::{Event, Sender},
 };
 use nalgebra_glm as glm;
@@ -111,7 +111,7 @@ impl InputSystem {
     }
 }
 
-impl ComponentQueryable for InputSystem {
+impl ComponentQuery for InputSystem {
     fn get(&self, component_type: ComponentType, _entity_id: EntityID) -> Option<ComponentRef> {
         match component_type {
             ComponentType::InputAcceleration => {

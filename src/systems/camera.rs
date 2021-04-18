@@ -42,13 +42,13 @@ impl CameraSystem {
 impl super::Renderable for CameraSystem {
     fn render(&mut self, thread_pool_scope: &Scope, delta_time: f32) {
         for component in &mut self.camera_components {
-            thread_pool_scope.execute(|message_bus_sender| {
+            thread_pool_scope.execute(|state_manager_sender| {
                 component.data.velocity +=
                     glm::vec2_to_vec3(&component.data.acceleration) * delta_time;
                 component.data.velocity *= 1.0 - delta_time;
                 component.data.location += component.data.velocity * delta_time;
 
-                message_bus_sender.push(Event {
+                state_manager_sender.push(Event {
                     entity_id: component.entity_id,
                     component_type: ComponentType::Location,
                     system: SystemType::Camera,
@@ -58,7 +58,7 @@ impl super::Renderable for CameraSystem {
     }
 }
 
-impl crate::state_manager::EventListener for CameraSystem {
+impl crate::state_manager::Listener for CameraSystem {
     fn receive(&mut self, _entity_id: EntityID, component: &Component) {
         match component {
             Component::InputAcceleration(acceleration) => {

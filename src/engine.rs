@@ -121,7 +121,7 @@ impl Engine {
             if let Some(client_systems) = client_systems {
                 client_systems.camera.render(&thread_pool_scope, delta_time);
                 client_systems
-                    .graphics
+                    .static_mesh
                     .render(&thread_pool_scope, delta_time);
             }
         });
@@ -129,11 +129,9 @@ impl Engine {
 
     fn distribute_events(&mut self) {
         self.state_manager.distribute(
-            self.thread_pool.get_message_bus_senders(),
+            self.thread_pool.get_message_bus_senders_mut(),
             &mut self.systems,
         );
-        self.state_manager
-            .clear(self.thread_pool.get_message_bus_senders_mut());
     }
 
     fn load_level(&mut self) {

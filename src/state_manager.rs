@@ -33,22 +33,14 @@ impl StateManager {
         StateManager {}
     }
 
-    pub fn distribute(&self, senders: &[Sender], systems: &mut Systems) {
+    pub fn distribute(&self, senders: &mut [Sender], systems: &mut Systems) {
         for sender in senders {
             for event in &sender.event_queue {
                 if let Some(component_val) = get_component_val(event, systems) {
-                    // send to interested systems
-                    systems
-                        .core
-                        .physics
-                        .receive(event.entity_id, &component_val);
+                    systems.receive_for_each_listener(event.entity_id, &component_val);
                 }
             }
-        }
-    }
 
-    pub fn clear(&self, senders: &mut [Sender]) {
-        for sender in senders {
             sender.event_queue.clear();
         }
     }
@@ -78,10 +70,10 @@ fn get_component_ref<'a>(event: &Event, systems: &'a Systems) -> Option<Componen
     }
 }
 
-pub trait ComponentQueryable {
+pub trait ComponentQuery {
     fn get(&self, component_type: ComponentType, entity_id: EntityID) -> Option<ComponentRef>;
 }
 
-pub trait EventListener {
+pub trait Listener {
     fn receive(&mut self, entity_id: EntityID, component: &Component);
 }
