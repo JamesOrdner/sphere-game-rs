@@ -1,13 +1,13 @@
 use crate::{
-    components::{Component, ComponentRef, ComponentType},
+    components::Component,
     entity::EntityID,
-    systems::{SystemType, Systems},
+    systems::{SubsystemType, Systems},
 };
 
 pub struct Event {
+    pub component: Component,
     pub entity_id: EntityID,
-    pub component_type: ComponentType,
-    pub system: SystemType,
+    pub system_type: SubsystemType,
 }
 
 pub struct Sender {
@@ -36,42 +36,12 @@ impl StateManager {
     pub fn distribute(&self, senders: &mut [Sender], systems: &mut Systems) {
         for sender in senders {
             for event in &sender.event_queue {
-                if let Some(component_val) = get_component_val(event, systems) {
-                    systems.receive_for_each_listener(event.entity_id, &component_val);
-                }
+                systems.receive(event.entity_id, &event.component);
             }
 
             sender.event_queue.clear();
         }
     }
-}
-
-fn get_component_val(event: &Event, systems: &Systems) -> Option<Component> {
-    if let Some(component_ref) = get_component_ref(event, systems) {
-        Some(Component::from_ref(component_ref))
-    } else {
-        None
-    }
-}
-
-fn get_component_ref<'a>(event: &Event, systems: &'a Systems) -> Option<ComponentRef<'a>> {
-    match event.system {
-        SystemType::Input => systems
-            .client
-            .as_ref()
-            .unwrap()
-            .input
-            .get(event.component_type, event.entity_id),
-        SystemType::Physics => systems
-            .core
-            .physics
-            .get(event.component_type, event.entity_id),
-        _ => None,
-    }
-}
-
-pub trait ComponentQuery {
-    fn get(&self, component_type: ComponentType, entity_id: EntityID) -> Option<ComponentRef>;
 }
 
 pub trait Listener {

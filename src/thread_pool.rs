@@ -1,7 +1,9 @@
 use crate::state_manager::Sender;
 use core::ops::FnOnce;
-use std::sync::{mpsc, Arc, Condvar, Mutex};
-use std::thread;
+use std::{
+    sync::{mpsc, Arc, Condvar, Mutex},
+    thread,
+};
 
 type Thunk<'a> = Box<dyn FnOnce(&mut Sender) + Send + 'a>;
 
@@ -12,7 +14,7 @@ enum Task {
 
 pub struct ThreadPool {
     threads: Vec<thread::JoinHandle<()>>,
-    message_bus_senders: Vec<Sender>,
+    event_senders: Vec<Sender>,
     task_sender: mpsc::SyncSender<Task>,
     num_pending_tasks: Arc<Mutex<usize>>,
     cvar: Arc<Condvar>,
@@ -21,7 +23,7 @@ pub struct ThreadPool {
 impl ThreadPool {
     pub fn new(num_threads: usize) -> Self {
         let mut threads = Vec::with_capacity(num_threads);
-        let mut message_bus_senders = Vec::<Sender>::with_capacity(num_threads);
+        let mut event_senders = Vec::with_capacity(num_threads);
 
         let (task_sender, task_receiver) = mpsc::sync_channel(num_threads);
         let shared_receiver = Arc::new(Mutex::new(task_receiver));
@@ -29,22 +31,17 @@ impl ThreadPool {
         let num_pending_tasks = Arc::new(Mutex::new(0));
         let cvar = Arc::new(Condvar::new());
 
-        for _ in 0..num_threads {
-            message_bus_senders.push(Sender::new());
-        }
-
         for i in 0..num_threads {
-            let mut message_bus_sender =
-                unsafe { message_bus_senders.as_mut_ptr().add(i).as_mut().unwrap() };
+            event_senders.push(Sender::new());
 
+            let event_sender = unsafe { event_senders.as_mut_ptr().add(i).as_mut().unwrap() };
             let task_receiver = shared_receiver.clone();
             let num_pending_tasks = num_pending_tasks.clone();
             let cvar = cvar.clone();
-
             threads.push(thread::spawn(move || loop {
                 match task_receiver.lock().unwrap().recv().unwrap() {
                     Task::Thunk { thunk } => {
-                        thunk(&mut message_bus_sender);
+                        thunk(event_sender);
                     }
                     Task::Join => break,
                 }
@@ -56,7 +53,7 @@ impl ThreadPool {
 
         ThreadPool {
             threads,
-            message_bus_senders,
+            event_senders,
             task_sender,
             num_pending_tasks,
             cvar,
@@ -71,12 +68,8 @@ impl ThreadPool {
         f(scope);
     }
 
-    pub fn get_message_bus_senders(&self) -> &[Sender] {
-        self.message_bus_senders.as_slice()
-    }
-
-    pub fn get_message_bus_senders_mut(&mut self) -> &mut [Sender] {
-        self.message_bus_senders.as_mut_slice()
+    pub fn get_event_senders_mut(&mut self) -> &mut [Sender] {
+        self.event_senders.as_mut_slice()
     }
 }
 

@@ -1,10 +1,9 @@
-use super::SystemType;
 use crate::{
-    components::{ComponentRef, ComponentType, InputAcceleration},
-    entity::EntityID,
-    state_manager::ComponentQuery,
+    components::{Component, InputAcceleration},
     state_manager::{Event, Sender},
+    systems::SubsystemType,
 };
+
 use nalgebra_glm as glm;
 use winit::event::{ElementState, Event as InputEvent, ScanCode, WindowEvent};
 
@@ -47,8 +46,8 @@ impl InputSystem {
     pub fn flush_input(&self, message_sender: &mut Sender) {
         message_sender.push(Event {
             entity_id: 0,
-            component_type: ComponentType::InputAcceleration,
-            system: SystemType::Input,
+            component: Component::InputAcceleration(self.input_acceleration),
+            system_type: SubsystemType::Input,
         });
     }
 
@@ -108,16 +107,5 @@ impl InputSystem {
             }
             _ => {}
         };
-    }
-}
-
-impl ComponentQuery for InputSystem {
-    fn get(&self, component_type: ComponentType, _entity_id: EntityID) -> Option<ComponentRef> {
-        match component_type {
-            ComponentType::InputAcceleration => {
-                Some(ComponentRef::InputAcceleration(&self.input_acceleration))
-            }
-            _ => None,
-        }
     }
 }

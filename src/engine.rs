@@ -2,7 +2,6 @@ use crate::entity;
 use crate::entity::Entity;
 use crate::state_manager::StateManager;
 use crate::systems::Systems;
-use crate::systems::{Renderable, Updatable};
 use crate::thread_pool::ThreadPool;
 use winit::window::Window;
 
@@ -61,9 +60,9 @@ impl Engine {
                     return;
                 }
 
-                self.systems.client.as_mut().unwrap().input.flush_input(
+                self.systems.input.as_mut().unwrap().flush_input(
                     self.thread_pool
-                        .get_message_bus_senders_mut()
+                        .get_event_senders_mut()
                         .first_mut()
                         .unwrap(),
                 );
@@ -73,12 +72,7 @@ impl Engine {
                 self.render();
             }
             event => {
-                self.systems
-                    .client
-                    .as_mut()
-                    .unwrap()
-                    .input
-                    .handle_input(event);
+                self.systems.input.as_mut().unwrap().handle_input(event);
             }
         });
     }
@@ -109,17 +103,15 @@ impl Engine {
     }
 
     fn render(&mut self) {
-        let delta_time = 1.0 / 60.0; // TODO
-
         let systems = &mut self.systems;
         self.thread_pool.scoped(|thread_pool_scope| {
-            systems.render(&thread_pool_scope, delta_time);
+            systems.render(&thread_pool_scope);
         });
     }
 
     fn distribute_events(&mut self) {
         self.state_manager.distribute(
-            self.thread_pool.get_message_bus_senders_mut(),
+            self.thread_pool.get_event_senders_mut(),
             &mut self.systems,
         );
     }

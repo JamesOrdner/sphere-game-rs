@@ -14,10 +14,15 @@ impl Entity {
 }
 
 pub fn create_static_mesh(entity_id: EntityID, systems: &mut Systems) -> Entity {
-    systems.core.physics.create_component(entity_id);
+    systems
+        .game
+        .core_subsystems
+        .physics
+        .create_component(entity_id);
 
-    if let Some(client_systems) = &mut systems.client {
-        client_systems
+    if let Some(render_system) = &mut systems.render {
+        render_system
+            .subsystems
             .static_mesh
             .create_component(entity_id, "suzanne");
     }
@@ -29,9 +34,16 @@ pub fn create_static_mesh(entity_id: EntityID, systems: &mut Systems) -> Entity 
 }
 
 fn destroy_static_mesh(entity_id: EntityID, systems: &mut Systems) {
-    systems.core.physics.destroy_component(entity_id);
+    systems
+        .game
+        .core_subsystems
+        .physics
+        .destroy_component(entity_id);
 
-    if let Some(client_systems) = &mut systems.client {
-        client_systems.static_mesh.destroy_component(entity_id);
+    if let Some(render_system) = &mut systems.render {
+        render_system
+            .subsystems
+            .static_mesh
+            .destroy_component(entity_id);
     }
 }

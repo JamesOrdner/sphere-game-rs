@@ -1,9 +1,10 @@
+use super::RenderSubsystem;
 use crate::{
-    common::ComponentArray, components::Component, entity::EntityID, thread_pool::Scope, vulkan,
+    common::ComponentArray, components::Component, entity::EntityID, state_manager::Listener,
+    thread_pool::Scope, vulkan,
 };
 use nalgebra_glm as glm;
-use vulkan::mesh::Mesh;
-use vulkan::InstanceData;
+use vulkan::{mesh::Mesh, InstanceData};
 use winit::window::Window;
 
 struct StaticMeshComponent {
@@ -106,21 +107,8 @@ impl StaticMeshSystem {
     }
 }
 
-impl crate::state_manager::Listener for StaticMeshSystem {
-    fn receive(&mut self, entity_id: EntityID, component: &Component) {
-        if !self.components.contains_entity(entity_id) { return }
-
-        match component {
-            Component::Location(location) => {
-                self.components[entity_id].data.location = *location;
-            }
-            _ => {}
-        }
-    }
-}
-
-impl super::Renderable for StaticMeshSystem {
-    fn render(&mut self, _thread_pool_scope: &Scope, _delta_time: f32) {
+impl RenderSubsystem for StaticMeshSystem {
+    fn render(&mut self, _thread_pool_scope: &Scope) {
         self.vulkan.begin_instance_update();
 
         let proj_matrix = glm::ortho_rh_zo(-2.0, 2.0, 2.0, -2.0, -2.0, 2.0);
@@ -149,5 +137,20 @@ impl super::Renderable for StaticMeshSystem {
         }
 
         self.vulkan.end_instance_update_and_render();
+    }
+}
+
+impl Listener for StaticMeshSystem {
+    fn receive(&mut self, entity_id: EntityID, component: &Component) {
+        if !self.components.contains_entity(entity_id) {
+            return;
+        }
+
+        match component {
+            Component::Location(location) => {
+                self.components[entity_id].data.location = *location;
+            }
+            _ => {}
+        }
     }
 }

@@ -1,98 +1,76 @@
-use crate::{components::Component, entity::EntityID, state_manager::Listener, thread_pool::Scope};
-use camera::CameraSystem;
+use crate::{components::Component, entity::EntityID, thread_pool::Scope};
+use game::GameSystem;
 use input::InputSystem;
-use physics::PhysicsSystem;
-use static_mesh::StaticMeshSystem;
+use render::RenderSystem;
+
 use winit::window::Window;
 
-pub mod camera;
-pub mod input;
-pub mod physics;
-pub mod static_mesh;
+mod game;
+mod input;
+mod render;
 
-pub trait Updatable {
-    fn update(&mut self, thread_pool_scope: &Scope);
-}
-
-pub trait Renderable {
-    fn render(&mut self, thread_pool_scope: &Scope, delta_time: f32);
-}
-
-pub enum SystemType {
+// Variants lower on the list will have higher state priority
+#[derive(PartialEq, PartialOrd)]
+pub enum SubsystemType {
     Camera,
     Input,
     Physics,
 }
 
-pub struct CoreSystems {
-    pub physics: PhysicsSystem,
-}
-
-impl CoreSystems {
-    fn new() -> Self {
-        Self {
-            physics: PhysicsSystem::new(),
-        }
-    }
-}
-
-pub struct ClientSystems {
-    pub camera: CameraSystem,
-    pub static_mesh: StaticMeshSystem,
-    pub input: InputSystem,
-}
-
-impl ClientSystems {
-    fn new(window: Window) -> Self {
-        Self {
-            camera: CameraSystem::new(),
-            static_mesh: StaticMeshSystem::new(window),
-            input: InputSystem::new(),
-        }
-    }
-}
-
 pub struct Systems {
-    pub core: CoreSystems,
-    pub client: Option<ClientSystems>,
+    pub input: Option<InputSystem>,
+    pub game: GameSystem,
+    pub render: Option<RenderSystem>,
 }
 
 impl Systems {
     pub fn create_server_systems() -> Self {
         Self {
-            core: CoreSystems::new(),
-            client: None,
+            input: None,
+            game: GameSystem::create_server(),
+            render: None,
         }
     }
 
     pub fn create_client_systems(window: Window) -> Self {
         Self {
-            core: CoreSystems::new(),
-            client: Some(ClientSystems::new(window)),
+            input: Some(InputSystem::new()),
+            game: GameSystem::create_client(),
+            render: Some(render::create_system(window)),
         }
     }
 
     pub fn update(&mut self, thread_pool_scope: &Scope) {
-        let core = &mut self.core;
+        self.game
+            .core_subsystems
+            .for_each(|subsystem| subsystem.update(thread_pool_scope));
 
-        core.physics.update(&thread_pool_scope);
+        if let Some(client_subsystems) = self.game.client_subsystems.as_mut() {
+            client_subsystems.for_each(|subsystem| subsystem.update(thread_pool_scope));
+        }
     }
 
-    pub fn render(&mut self, thread_pool_scope: &Scope, delta_time: f32) {
-        let core = &mut self.core;
-        let client = self.client.as_mut().unwrap();
-
-        core.physics.render(&thread_pool_scope, delta_time);
-        client.camera.render(&thread_pool_scope, delta_time);
-        client.static_mesh.render(&thread_pool_scope, delta_time);
+    pub fn render(&mut self, thread_pool_scope: &Scope) {
+        if let Some(render_system) = self.render.as_mut() {
+            render_system
+                .subsystems
+                .for_each(|subsystem| subsystem.render(&thread_pool_scope));
+        }
     }
 
-    pub fn receive_for_each_listener(&mut self, entity_id: EntityID, component: &Component) {
-        self.core.physics.receive(entity_id, component);
+    pub fn receive(&mut self, entity_id: EntityID, component: &Component) {
+        self.game
+            .core_subsystems
+            .for_each(|subsystem| subsystem.receive(entity_id, component));
 
-        if let Some(client_systems) = &mut self.client {
-            client_systems.camera.receive(entity_id, component);
-            client_systems.static_mesh.receive(entity_id, component);
+        if let Some(client_subsystems) = self.game.client_subsystems.as_mut() {
+            client_subsystems.for_each(|subsystem| subsystem.receive(entity_id, component));
+        }
+
+        if let Some(render_system) = self.render.as_mut() {
+            render_system
+                .subsystems
+                .for_each(|subsystem| subsystem.receive(entity_id, component));
         }
     }
 }
