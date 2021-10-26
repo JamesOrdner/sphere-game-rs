@@ -1,0 +1,8 @@
+[package]
+name = "task"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+lazy_static = "1.4"
+spin = "0.9"

@@ -1,14 +1,5 @@
-[package]
-name = "sphere-game-rs"
-version = "0.1.0"
-authors = ["JamesOrdner <5782729+JamesOrdner@users.noreply.github.com>"]
-edition = "2018"
+[workspace]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-ash = "0.31"
-ash-window = "0.5"
-gltf = "0.15"
-nalgebra-glm = "0.10"
-winit = "0.24.0"
+members = [
+    "crates/*",
+]

@@ -142,7 +142,7 @@ struct Shader<'a> {
     frag_shader_module: vk::ShaderModule,
 }
 
-const SHADERS_DIR: &'static str = concat!(env!("CARGO_MANIFEST_DIR"), "/res/shaders");
+const SHADERS_DIR: &'static str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../res/shaders");
 
 impl<'a> Shader<'a> {
     fn new(vulkan: &'a VulkanInfo, name: &str, entry: &'a CStr) -> Self {

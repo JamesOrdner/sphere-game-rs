@@ -1,11 +1,11 @@
-use crate::{state_manager::Listener, thread_pool::Scope};
+use crate::state_manager::Listener;
 use static_mesh::StaticMeshSystem;
 use winit::window::Window;
 
 pub mod static_mesh;
 
 pub trait RenderSubsystem: Listener {
-    fn render(&mut self, thread_pool_scope: &Scope);
+    fn render(&mut self);
 }
 
 pub struct RenderSubsystems {

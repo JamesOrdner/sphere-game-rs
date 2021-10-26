@@ -1,7 +1,7 @@
 use nalgebra_glm as glm;
 use std::convert::TryFrom;
 
-const MESHES_DIR: &'static str = concat!(env!("CARGO_MANIFEST_DIR"), "/res/meshes");
+const MESHES_DIR: &'static str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../res/meshes");
 
 #[derive(Clone, Copy)]
 pub struct Vertex {

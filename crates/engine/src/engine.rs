@@ -1,18 +1,21 @@
+use std::pin::Pin;
+
+use task::Executor;
+use winit::window::Window;
+
 use crate::entity;
 use crate::entity::Entity;
 use crate::state_manager::StateManager;
-use crate::systems::Systems;
-use crate::thread_pool::ThreadPool;
-use winit::window::Window;
+use crate::systems::ClientSystems;
 
 pub const UPDATE_INTERVAL: std::time::Duration = std::time::Duration::from_micros(16_666);
 
 pub struct Engine {
     state_manager: StateManager,
-    thread_pool: ThreadPool,
+    task_executor: Executor,
     last_update: std::time::Instant,
     entities: Vec<Entity>,
-    systems: Systems,
+    systems: ClientSystems,
 }
 
 impl Engine {
@@ -21,28 +24,33 @@ impl Engine {
 
         Engine {
             state_manager: StateManager::new(),
-            thread_pool: ThreadPool::new(2),
+            task_executor: Executor::new(),
             last_update: std::time::Instant::now(),
             entities: Vec::new(),
-            systems: Systems::create_client_systems(window),
+            systems: ClientSystems::new(window),
         }
     }
 
-    pub fn create_server() -> Self {
-        Engine {
-            state_manager: StateManager::new(),
-            thread_pool: ThreadPool::new(2),
-            last_update: std::time::Instant::now(),
-            entities: Vec::new(),
-            systems: Systems::create_server_systems(),
-        }
-    }
+    // pub fn create_server() -> Self {
+    //     Engine {
+    //         state_manager: StateManager::new(),
+    //         task_executor: Executor::new(),
+    //         last_update: std::time::Instant::now(),
+    //         entities: Vec::new(),
+    //         systems: Systems::create_server_systems(),
+    //     }
+    // }
 
     pub fn run_client(mut self, event_loop: winit::event_loop::EventLoop<()>) -> ! {
         use winit::{
             event::{Event, WindowEvent},
             event_loop::ControlFlow,
         };
+
+        println!(
+            "{}",
+            std::mem::size_of_val(&self.systems.simulate(&self.state_manager.sender))
+        );
 
         self.load_level();
         self.last_update = std::time::Instant::now();
@@ -60,19 +68,16 @@ impl Engine {
                     return;
                 }
 
-                self.systems.input.as_mut().unwrap().flush_input(
-                    self.thread_pool
-                        .get_event_senders_mut()
-                        .first_mut()
-                        .unwrap(),
-                );
+                self.systems
+                    .input
+                    .flush_input(&mut self.state_manager.sender);
                 self.distribute_events();
-                self.update();
+                self.simulate();
                 self.distribute_events();
                 self.render();
             }
             event => {
-                self.systems.input.as_mut().unwrap().handle_input(event);
+                self.systems.input.handle_input(event);
             }
         });
     }
@@ -82,7 +87,7 @@ impl Engine {
         self.last_update = std::time::Instant::now();
 
         loop {
-            self.update();
+            self.simulate();
             self.distribute_events();
             std::thread::sleep(std::time::Duration::from_millis(1));
         }
@@ -90,30 +95,22 @@ impl Engine {
         // self.shutdown();
     }
 
-    fn update(&mut self) {
+    fn simulate(&mut self) {
         let time_now = std::time::Instant::now();
         while time_now.duration_since(self.last_update) > UPDATE_INTERVAL {
             self.last_update += UPDATE_INTERVAL;
-
-            let systems = &mut self.systems;
-            self.thread_pool.scoped(|thread_pool_scope| {
-                systems.update(&thread_pool_scope);
-            });
+            let mut update = self.systems.simulate(&self.state_manager.sender);
+            let update = unsafe { Pin::new_unchecked(&mut update) };
+            self.task_executor.execute_blocking(update);
         }
     }
 
     fn render(&mut self) {
-        let systems = &mut self.systems;
-        self.thread_pool.scoped(|thread_pool_scope| {
-            systems.render(&thread_pool_scope);
-        });
+        self.systems.render();
     }
 
     fn distribute_events(&mut self) {
-        self.state_manager.distribute(
-            self.thread_pool.get_event_senders_mut(),
-            &mut self.systems,
-        );
+        self.state_manager.distribute(&mut self.systems);
     }
 
     fn load_level(&mut self) {

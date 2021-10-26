@@ -1,13 +1,14 @@
+use nalgebra_glm as glm;
+use task::run_slice;
+
 use crate::{
     common::ComponentArray,
     components::{Component, Location},
     engine::UPDATE_INTERVAL,
     entity::EntityID,
-    state_manager::{Event, Listener},
-    systems::{game::GameSubsystem, SubsystemType},
-    thread_pool::Scope,
+    state_manager::{Event, EventSender, Listener},
+    systems::SubsystemType,
 };
-use nalgebra_glm as glm;
 
 struct ComponentData {
     location: Location,
@@ -38,21 +39,18 @@ impl PhysicsSystem {
     pub fn destroy_component(&mut self, entity_id: EntityID) {
         self.data.remove(entity_id);
     }
-}
 
-impl GameSubsystem for PhysicsSystem {
-    fn update(&mut self, thread_pool_scope: &Scope) {
-        for component in &mut self.data {
-            thread_pool_scope.execute(move |state_manager_sender| {
-                component.data.location += component.data.velocity * UPDATE_INTERVAL.as_secs_f32();
+    pub async fn simulate(&mut self, event_sender: &EventSender) {
+        run_slice(self.data.as_mut_slice(), |component| {
+            component.data.location += component.data.velocity * UPDATE_INTERVAL.as_secs_f32();
 
-                state_manager_sender.push(Event {
-                    entity_id: component.entity_id,
-                    component: Component::Location(component.data.location),
-                    system_type: SubsystemType::Physics,
-                });
+            event_sender.push(Event {
+                entity_id: component.entity_id,
+                component: Component::Location(component.data.location),
+                system_type: SubsystemType::Physics,
             });
-        }
+        })
+        .await;
     }
 }
 

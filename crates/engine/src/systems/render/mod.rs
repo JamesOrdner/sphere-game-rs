@@ -7,8 +7,10 @@ pub struct RenderSystem {
     pub subsystems: RenderSubsystems,
 }
 
-pub fn create_system(window: Window) -> RenderSystem {
-    RenderSystem {
-        subsystems: RenderSubsystems::create(window),
+impl RenderSystem {
+    pub fn new(window: Window) -> Self {
+        Self {
+            subsystems: RenderSubsystems::create(window),
+        }
     }
 }

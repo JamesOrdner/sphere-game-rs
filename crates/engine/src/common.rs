@@ -48,6 +48,10 @@ impl<T> ComponentArray<T> {
     pub fn contains_entity(&self, entity_id: EntityID) -> bool {
         self.map.contains_key(&entity_id)
     }
+
+    pub fn as_mut_slice(&mut self) -> &mut [DataEntry<T>] {
+        self.data.as_mut_slice()
+    }
 }
 
 impl<T> Index<EntityID> for ComponentArray<T> {

@@ -1,7 +1,7 @@
 use super::RenderSubsystem;
 use crate::{
     common::ComponentArray, components::Component, entity::EntityID, state_manager::Listener,
-    thread_pool::Scope, vulkan,
+    vulkan,
 };
 use nalgebra_glm as glm;
 use vulkan::{mesh::Mesh, InstanceData};
@@ -108,7 +108,7 @@ impl StaticMeshSystem {
 }
 
 impl RenderSubsystem for StaticMeshSystem {
-    fn render(&mut self, _thread_pool_scope: &Scope) {
+    fn render(&mut self) {
         self.vulkan.begin_instance_update();
 
         let proj_matrix = glm::ortho_rh_zo(-2.0, 2.0, 2.0, -2.0, -2.0, 2.0);
