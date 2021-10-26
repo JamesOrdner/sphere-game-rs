@@ -1,6 +1,6 @@
 use winit::window::Window;
 
-use crate::{components::Component, entity::EntityID, state_manager::EventSender};
+use crate::{components::Component, entity::EntityID};
 
 use self::{
     input::InputSystem,
@@ -39,8 +39,8 @@ impl ClientSystems {
         }
     }
 
-    pub async fn simulate(&mut self, event_sender: &EventSender) {
-        self.simulation.simulate(event_sender).await;
+    pub async fn simulate(&mut self) {
+        self.simulation.simulate().await;
     }
 
     pub fn render(&mut self) {

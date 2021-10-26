@@ -22,9 +22,12 @@ impl Engine {
     pub fn create_client(event_loop: &winit::event_loop::EventLoop<()>) -> Self {
         let window = Window::new(&event_loop).unwrap();
 
+        let (task_executor, thread_ids) = Executor::new();
+        let state_manager = StateManager::new(thread_ids);
+
         Engine {
-            state_manager: StateManager::new(),
-            task_executor: Executor::new(),
+            state_manager,
+            task_executor,
             last_update: std::time::Instant::now(),
             entities: Vec::new(),
             systems: ClientSystems::new(window),
@@ -47,10 +50,7 @@ impl Engine {
             event_loop::ControlFlow,
         };
 
-        println!(
-            "{}",
-            std::mem::size_of_val(&self.systems.simulate(&self.state_manager.sender))
-        );
+        println!("{}", std::mem::size_of_val(&self.systems.simulate()));
 
         self.load_level();
         self.last_update = std::time::Instant::now();
@@ -70,7 +70,7 @@ impl Engine {
 
                 self.systems
                     .input
-                    .flush_input(&mut self.state_manager.sender);
+                    .flush_input(&mut self.state_manager.sender());
                 self.distribute_events();
                 self.simulate();
                 self.distribute_events();
@@ -99,7 +99,7 @@ impl Engine {
         let time_now = std::time::Instant::now();
         while time_now.duration_since(self.last_update) > UPDATE_INTERVAL {
             self.last_update += UPDATE_INTERVAL;
-            let mut update = self.systems.simulate(&self.state_manager.sender);
+            let mut update = self.systems.simulate();
             let update = unsafe { Pin::new_unchecked(&mut update) };
             self.task_executor.execute_blocking(update);
         }

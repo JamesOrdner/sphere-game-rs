@@ -1,3 +1,5 @@
+use std::thread;
+
 use nalgebra_glm as glm;
 use task::run_slice;
 
@@ -6,7 +8,7 @@ use crate::{
     components::{Component, Location},
     engine::UPDATE_INTERVAL,
     entity::EntityID,
-    state_manager::{Event, EventSender, Listener},
+    state_manager::{push_event, Listener},
     systems::SubsystemType,
 };
 
@@ -40,15 +42,16 @@ impl PhysicsSystem {
         self.data.remove(entity_id);
     }
 
-    pub async fn simulate(&mut self, event_sender: &EventSender) {
+    pub async fn simulate(&mut self) {
         run_slice(self.data.as_mut_slice(), |component| {
             component.data.location += component.data.velocity * UPDATE_INTERVAL.as_secs_f32();
 
-            event_sender.push(Event {
-                entity_id: component.entity_id,
-                component: Component::Location(component.data.location),
-                system_type: SubsystemType::Physics,
-            });
+            push_event(
+                component.entity_id,
+                Component::Location(component.data.location),
+                SubsystemType::Physics,
+                thread::current().id(),
+            );
         })
         .await;
     }

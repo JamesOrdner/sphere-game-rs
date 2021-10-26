@@ -5,10 +5,10 @@ use std::{
     ptr,
     sync::{
         mpsc::{sync_channel, Receiver, SyncSender},
-        Mutex,
+        Arc, Mutex,
     },
     task::{Context, Poll, RawWaker, RawWakerVTable, Waker},
-    thread::{self, JoinHandle},
+    thread::{self, JoinHandle, ThreadId},
 };
 
 use lazy_static::lazy_static;
@@ -156,13 +156,19 @@ enum ExecutorMessage {
 }
 
 impl Executor {
-    pub fn new() -> Self {
+    pub fn new() -> (Self, Vec<ThreadId>) {
         const CPU_COUNT: usize = 4;
 
         let mut thread_join_handles = Vec::with_capacity(CPU_COUNT);
 
+        let thread_ids = Mutex::new(Vec::new());
+        // SAFETY: we only ever reference this while thread_ids is still in scope
+        let thread_ids_ref =
+            unsafe { std::mem::transmute::<_, &'static Mutex<Vec<ThreadId>>>(&thread_ids) };
+
         for _ in 0..CPU_COUNT {
             thread_join_handles.push(thread::spawn(|| {
+                thread_ids_ref.lock().unwrap().push(thread::current().id());
                 loop {
                     match SYNC_CHANNEL.receiver.lock().unwrap().recv().unwrap() {
                         ExecutorMessage::Task(task_ptr) => {
@@ -176,9 +182,15 @@ impl Executor {
             }));
         }
 
-        Self {
-            thread_join_handles,
+        while thread_ids.lock().unwrap().len() < CPU_COUNT {
+            std::thread::sleep(std::time::Duration::from_millis(1));
         }
+
+        let executor = Self {
+            thread_join_handles,
+        };
+
+        (executor, thread_ids.into_inner().unwrap())
     }
 
     pub fn execute_blocking<F: Future<Output = ()>>(&self, future: Pin<&mut F>) {

@@ -1,8 +1,4 @@
-use crate::{
-    components::Component,
-    entity::EntityID,
-    state_manager::{EventSender, Listener},
-};
+use crate::{components::Component, entity::EntityID, state_manager::Listener};
 
 use self::{camera::CameraSystem, physics::PhysicsSystem};
 
@@ -26,9 +22,9 @@ impl ClientSimulationSystem {
         }
     }
 
-    pub async fn simulate(&mut self, event_sender: &EventSender) {
-        let camera = self.camera.simulate(event_sender);
-        let physics = self.physics.simulate(event_sender);
+    pub async fn simulate(&mut self) {
+        let camera = self.camera.simulate();
+        let physics = self.physics.simulate();
 
         camera.await;
         physics.await;
@@ -47,8 +43,8 @@ impl ServerSimulationSystem {
         }
     }
 
-    pub async fn simulate(&mut self, event_sender: &EventSender) {
-        let physics = self.physics.simulate(event_sender);
+    pub async fn simulate(&mut self) {
+        let physics = self.physics.simulate();
 
         physics.await;
     }

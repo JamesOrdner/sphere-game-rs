@@ -1,4 +1,4 @@
-use std::sync::Mutex;
+use std::thread::ThreadId;
 
 use crate::{
     components::Component,
@@ -13,40 +13,72 @@ pub struct Event {
 }
 
 pub struct EventSender {
-    event_queue: Mutex<Vec<Event>>,
+    event_queue: Vec<Event>,
 }
 
 impl EventSender {
     pub fn new() -> Self {
         EventSender {
-            event_queue: Mutex::new(Vec::new()),
+            event_queue: Vec::new(),
         }
     }
 
-    pub fn push(&self, event: Event) {
-        self.event_queue.lock().unwrap().push(event);
+    pub fn push(&mut self, entity_id: EntityID, component: Component, system_type: SubsystemType) {
+        self.event_queue.push(Event {
+            entity_id,
+            component,
+            system_type,
+        });
     }
 }
 
-pub struct StateManager {
-    pub sender: EventSender,
+static mut EVENT_SENDERS: Vec<(ThreadId, EventSender)> = Vec::new();
+
+pub fn push_event(
+    entity_id: EntityID,
+    component: Component,
+    system_type: SubsystemType,
+    thread_id: ThreadId,
+) {
+    unsafe {
+        for event_sender in &mut EVENT_SENDERS {
+            if event_sender.0 == thread_id {
+                event_sender.1.push(entity_id, component, system_type);
+                break;
+            }
+        }
+    }
+
+    unreachable!("push_event() called from invalid thread")
 }
+
+pub struct StateManager;
 
 impl StateManager {
-    pub fn new() -> Self {
-        Self {
-            sender: EventSender::new(),
+    pub fn new(thread_ids: Vec<ThreadId>) -> Self {
+        unsafe {
+            EVENT_SENDERS.clear();
+            for thread_id in thread_ids {
+                EVENT_SENDERS.push((thread_id, EventSender::new()));
+            }
         }
+
+        Self {}
     }
 
-    pub fn distribute(&self, systems: &mut ClientSystems) {
-        let mut event_queue = self.sender.event_queue.lock().unwrap();
+    pub fn sender(&mut self) -> &mut EventSender {
+        unsafe { &mut EVENT_SENDERS[0].1 }
+    }
 
-        for event in &*event_queue {
-            systems.receive(event.entity_id, &event.component);
+    pub fn distribute(&mut self, systems: &mut ClientSystems) {
+        unsafe {
+            for event_sender in &mut EVENT_SENDERS {
+                for event in &mut event_sender.1.event_queue {
+                    systems.receive(event.entity_id, &event.component);
+                }
+                event_sender.1.event_queue.clear();
+            }
         }
-
-        event_queue.clear();
     }
 }
 

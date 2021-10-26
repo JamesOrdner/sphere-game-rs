@@ -1,6 +1,6 @@
 use crate::{
     components::{Component, InputAcceleration},
-    state_manager::{Event, EventSender},
+    state_manager::EventSender,
     systems::SubsystemType,
 };
 
@@ -44,11 +44,11 @@ impl InputSystem {
     }
 
     pub fn flush_input(&self, event_sender: &mut EventSender) {
-        event_sender.push(Event {
-            entity_id: 0,
-            component: Component::InputAcceleration(self.input_acceleration),
-            system_type: SubsystemType::Input,
-        });
+        event_sender.push(
+            0,
+            Component::InputAcceleration(self.input_acceleration),
+            SubsystemType::Input,
+        );
     }
 
     fn handle_keypress(&mut self, scancode: ScanCode, state: ElementState) {
