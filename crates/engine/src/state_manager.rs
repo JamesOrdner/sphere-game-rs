@@ -44,7 +44,7 @@ pub fn push_event(
         for event_sender in &mut EVENT_SENDERS {
             if event_sender.0 == thread_id {
                 event_sender.1.push(entity_id, component, system_type);
-                break;
+                return;
             }
         }
     }
