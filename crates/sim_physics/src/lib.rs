@@ -1,29 +1,23 @@
-use std::thread;
-
+use component::{Component, Location};
+use data::ComponentArray;
+use entity::EntityID;
+use event::{push_event, EventListener};
 use nalgebra_glm as glm;
+use system::SubsystemType;
 use task::run_slice;
-
-use crate::{
-    common::ComponentArray,
-    components::{Component, Location},
-    engine::UPDATE_INTERVAL,
-    entity::EntityID,
-    state_manager::{push_event, Listener},
-    systems::SubsystemType,
-};
 
 struct ComponentData {
     location: Location,
     velocity: glm::Vec3,
 }
 
-pub struct PhysicsSystem {
+pub struct System {
     data: ComponentArray<ComponentData>,
 }
 
-impl PhysicsSystem {
+impl System {
     pub fn new() -> Self {
-        PhysicsSystem {
+        System {
             data: ComponentArray::new(),
         }
     }
@@ -44,21 +38,21 @@ impl PhysicsSystem {
 
     pub async fn simulate(&mut self) {
         run_slice(self.data.as_mut_slice(), |component| {
-            component.data.location += component.data.velocity * UPDATE_INTERVAL.as_secs_f32();
+            component.data.location +=
+                component.data.velocity * std::time::Duration::from_micros(16_666).as_secs_f32();
 
             push_event(
                 component.entity_id,
                 Component::Location(component.data.location),
                 SubsystemType::Physics,
-                thread::current().id(),
             );
         })
         .await;
     }
 }
 
-impl Listener for PhysicsSystem {
-    fn receive(&mut self, entity_id: EntityID, component: &Component) {
+impl EventListener for System {
+    fn receive_event(&mut self, entity_id: EntityID, component: &Component) {
         if !self.data.contains_entity(entity_id) {
             return;
         }

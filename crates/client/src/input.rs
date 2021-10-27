@@ -1,13 +1,10 @@
-use crate::{
-    components::{Component, InputAcceleration},
-    state_manager::EventSender,
-    systems::SubsystemType,
-};
-
+use component::{Component, InputAcceleration};
+use event::push_event;
 use nalgebra_glm as glm;
+use system::SubsystemType;
 use winit::event::{ElementState, Event as InputEvent, ScanCode, WindowEvent};
 
-pub struct InputSystem {
+pub struct System {
     input_acceleration: InputAcceleration,
     w_held: bool,
     a_held: bool,
@@ -15,9 +12,9 @@ pub struct InputSystem {
     d_held: bool,
 }
 
-impl InputSystem {
+impl System {
     pub fn new() -> Self {
-        InputSystem {
+        Self {
             input_acceleration: glm::Vec2::zeros(),
             w_held: false,
             a_held: false,
@@ -43,8 +40,8 @@ impl InputSystem {
         };
     }
 
-    pub fn flush_input(&self, event_sender: &mut EventSender) {
-        event_sender.push(
+    pub async fn flush_input(&self) {
+        push_event(
             0,
             Component::InputAcceleration(self.input_acceleration),
             SubsystemType::Input,

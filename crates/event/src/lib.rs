@@ -1,18 +1,16 @@
-use std::thread::ThreadId;
+use std::thread::{self, ThreadId};
 
-use crate::{
-    components::Component,
-    entity::EntityID,
-    systems::{ClientSystems, SubsystemType},
-};
+use component::Component;
+use entity::EntityID;
+use system::SubsystemType;
 
-pub struct Event {
+struct Event {
     pub component: Component,
     pub entity_id: EntityID,
     pub system_type: SubsystemType,
 }
 
-pub struct EventSender {
+struct EventSender {
     event_queue: Vec<Event>,
 }
 
@@ -34,12 +32,9 @@ impl EventSender {
 
 static mut EVENT_SENDERS: Vec<(ThreadId, EventSender)> = Vec::new();
 
-pub fn push_event(
-    entity_id: EntityID,
-    component: Component,
-    system_type: SubsystemType,
-    thread_id: ThreadId,
-) {
+pub fn push_event(entity_id: EntityID, component: Component, system_type: SubsystemType) {
+    let thread_id = thread::current().id();
+
     unsafe {
         for event_sender in &mut EVENT_SENDERS {
             if event_sender.0 == thread_id {
@@ -52,9 +47,9 @@ pub fn push_event(
     unreachable!("push_event() called from invalid thread")
 }
 
-pub struct StateManager;
+pub struct EventManager;
 
-impl StateManager {
+impl EventManager {
     pub fn new(thread_ids: Vec<ThreadId>) -> Self {
         unsafe {
             EVENT_SENDERS.clear();
@@ -66,15 +61,11 @@ impl StateManager {
         Self {}
     }
 
-    pub fn sender(&mut self) -> &mut EventSender {
-        unsafe { &mut EVENT_SENDERS[0].1 }
-    }
-
-    pub fn distribute(&mut self, systems: &mut ClientSystems) {
+    pub fn distribute(&mut self, systems: &mut dyn EventListener) {
         unsafe {
             for event_sender in &mut EVENT_SENDERS {
                 for event in &mut event_sender.1.event_queue {
-                    systems.receive(event.entity_id, &event.component);
+                    systems.receive_event(event.entity_id, &event.component);
                 }
                 event_sender.1.event_queue.clear();
             }
@@ -82,6 +73,6 @@ impl StateManager {
     }
 }
 
-pub trait Listener {
-    fn receive(&mut self, entity_id: EntityID, component: &Component);
+pub trait EventListener {
+    fn receive_event(&mut self, entity_id: EntityID, component: &Component);
 }

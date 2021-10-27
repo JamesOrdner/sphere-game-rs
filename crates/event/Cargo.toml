@@ -1,0 +1,9 @@
+[package]
+name = "event"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+component = { path = "../component" }
+entity = { path = "../entity" }
+system = { path = "../system" }

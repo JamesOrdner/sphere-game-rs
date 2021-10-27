@@ -5,7 +5,7 @@ use std::{
     ptr,
     sync::{
         mpsc::{sync_channel, Receiver, SyncSender},
-        Arc, Mutex,
+        Mutex,
     },
     task::{Context, Poll, RawWaker, RawWakerVTable, Waker},
     thread::{self, JoinHandle, ThreadId},
@@ -195,15 +195,14 @@ impl Executor {
 
     pub fn execute_blocking<F: Future<Output = ()>>(&self, future: Pin<&mut F>) {
         let mut task = Task::new(future);
-        let mut task = unsafe { Pin::new_unchecked(&mut task) };
+        let task = unsafe { Pin::new_unchecked(&mut task) };
 
-        let mut task_join = TaskJoinHandle::new();
-        let task_join = unsafe { Pin::new_unchecked(&mut task_join) };
+        let mut join_handle = TaskJoinHandle::new();
+        let join_handle = unsafe { Pin::new_unchecked(&mut join_handle) };
 
-        task.join_handle = unsafe { std::mem::transmute::<_, *const TaskJoinHandle>(&*task_join) };
-        task.poll_future();
+        task.run(&join_handle);
 
-        while !task_join.inner.lock().done {
+        while !join_handle.inner.lock().done {
             std::thread::sleep(std::time::Duration::from_millis(1));
         }
     }

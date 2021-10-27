@@ -1,0 +1,14 @@
+[package]
+name = "sim_camera"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+nalgebra-glm = "0.15"
+
+component = { path = "../component" }
+data = { path = "../data" }
+entity = { path = "../entity" }
+event = { path = "../event" }
+system = { path = "../system" }
+task = { path = "../task" }

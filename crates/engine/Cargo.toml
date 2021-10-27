@@ -7,10 +7,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ash = "0.31"
-ash-window = "0.5"
-gltf = "0.15"
-nalgebra-glm = "0.10"
-winit = "0.24"
+winit = "0.25"
 
-task = { path = "../task" }
+client = { path = "../client" }
+server = { path = "../server" }

@@ -1,14 +1,9 @@
-use std::thread;
-
+use component::Component;
+use data::ComponentArray;
+use entity::EntityID;
+use event::{push_event, EventListener};
 use nalgebra_glm as glm;
-
-use crate::{
-    common::ComponentArray,
-    components::Component,
-    entity::EntityID,
-    state_manager::{push_event, Listener},
-    systems::SubsystemType,
-};
+use system::SubsystemType;
 
 struct CameraComponent {
     location: glm::Vec3,
@@ -16,13 +11,13 @@ struct CameraComponent {
     acceleration: glm::Vec2,
 }
 
-pub struct CameraSystem {
+pub struct System {
     data: ComponentArray<CameraComponent>,
 }
 
-impl CameraSystem {
+impl System {
     pub fn new() -> Self {
-        CameraSystem {
+        Self {
             data: ComponentArray::new(),
         }
     }
@@ -53,14 +48,13 @@ impl CameraSystem {
                 component.entity_id,
                 Component::Location(component.data.location),
                 SubsystemType::Camera,
-                thread::current().id(),
             );
         }
     }
 }
 
-impl Listener for CameraSystem {
-    fn receive(&mut self, entity_id: EntityID, component: &Component) {
+impl EventListener for System {
+    fn receive_event(&mut self, entity_id: EntityID, component: &Component) {
         if !self.data.contains_entity(entity_id) {
             return;
         }

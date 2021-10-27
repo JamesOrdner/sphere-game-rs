@@ -1,8 +1,7 @@
-use super::RenderSubsystem;
-use crate::{
-    common::ComponentArray, components::Component, entity::EntityID, state_manager::Listener,
-    vulkan,
-};
+use component::Component;
+use data::ComponentArray;
+use entity::EntityID;
+use event::EventListener;
 use nalgebra_glm as glm;
 use vulkan::{mesh::Mesh, InstanceData};
 use winit::window::Window;
@@ -18,13 +17,13 @@ struct LoadedMesh {
     ref_count: usize,
 }
 
-pub struct StaticMeshSystem {
+pub struct System {
     components: ComponentArray<StaticMeshComponent>,
     vulkan: vulkan::Vulkan,
     loaded_meshes: Vec<LoadedMesh>,
 }
 
-impl StaticMeshSystem {
+impl System {
     pub fn new(window: Window) -> Self {
         Self {
             components: ComponentArray::new(),
@@ -105,10 +104,8 @@ impl StaticMeshSystem {
                 .unload_last_mesh(self.loaded_meshes.pop().unwrap().vertex_buffer);
         }
     }
-}
 
-impl RenderSubsystem for StaticMeshSystem {
-    fn render(&mut self) {
+    pub async fn render(&mut self) {
         self.vulkan.begin_instance_update();
 
         let proj_matrix = glm::ortho_rh_zo(-2.0, 2.0, 2.0, -2.0, -2.0, 2.0);
@@ -140,8 +137,8 @@ impl RenderSubsystem for StaticMeshSystem {
     }
 }
 
-impl Listener for StaticMeshSystem {
-    fn receive(&mut self, entity_id: EntityID, component: &Component) {
+impl EventListener for System {
+    fn receive_event(&mut self, entity_id: EntityID, component: &Component) {
         if !self.components.contains_entity(entity_id) {
             return;
         }

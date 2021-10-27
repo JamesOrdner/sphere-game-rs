@@ -1,0 +1,11 @@
+[package]
+name = "server"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+component = { path = "../component" }
+entity = { path = "../entity" }
+event = { path = "../event" }
+sim_physics = { path = "../sim_physics" }
+task = { path = "../task" }
