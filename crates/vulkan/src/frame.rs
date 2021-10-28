@@ -1,12 +1,12 @@
 use super::allocator;
 use super::VulkanInfo;
 use ash::{version::DeviceV1_0, version::InstanceV1_0, vk};
-use nalgebra_glm as glm;
+use nalgebra_glm::Mat4;
 use std::ffi::c_void;
 
 #[derive(Clone, Copy)]
 pub struct InstanceData {
-    pub model_matrix: glm::Mat4,
+    pub model_matrix: Mat4,
 }
 
 /// CurrentFrameInfo does not implement Clone or Copy, providing safety

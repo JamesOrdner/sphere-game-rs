@@ -1,3 +1,4 @@
+use ::entity::EntityId;
 use component::Component;
 use event::{EventListener, EventManager};
 use task::{run_parallel, Executor};
@@ -71,25 +72,26 @@ impl Client {
     }
 
     fn frame(&mut self) {
-        const UPDATE_INTERVAL: std::time::Duration = std::time::Duration::from_micros(16_666);
-
         self.flush_input();
         self.distribute_events();
 
+        let time_now = std::time::Instant::now();
+        let delta_time = time_now.duration_since(self.last_update).as_secs_f32();
+        self.last_update = time_now;
+
         let mut frame_task = async {
             let mut simulation = async {
-                let time_now = std::time::Instant::now();
-                while time_now.duration_since(self.last_update) > UPDATE_INTERVAL {
-                    self.last_update += UPDATE_INTERVAL;
+                let mut camera = self.systems.sim_camera.simulate(delta_time);
+                let mut physics = self.systems.sim_physics.simulate(delta_time);
 
-                    let mut sim_camera = self.systems.sim_camera.simulate();
-                    let mut sim_physics = self.systems.sim_physics.simulate();
-
-                    run_parallel([&mut sim_camera, &mut sim_physics]).await;
-                }
+                run_parallel([&mut camera, &mut physics]).await;
             };
 
-            let mut graphics = self.systems.gfx_static_mesh.render();
+            let mut graphics = async {
+                let mut static_mesh = self.systems.gfx_static_mesh.render();
+
+                run_parallel([&mut static_mesh]).await;
+            };
 
             run_parallel([&mut simulation, &mut graphics]).await;
         };
@@ -99,9 +101,8 @@ impl Client {
 
     fn load_level(&mut self) {
         self.entities
-            .push(entity::create_static_mesh(0, &mut self.systems));
-        // self.entities
-        //     .push(entity::create_camera(1, &mut self.systems));
+            .push(entity::static_mesh(10, &mut self.systems));
+        self.entities.push(entity::camera(20, &mut self.systems));
     }
 
     fn shutdown(&mut self) {
@@ -130,9 +131,9 @@ impl Systems {
 }
 
 impl EventListener for Systems {
-    fn receive_event(&mut self, entity_id: ::entity::EntityID, component: &Component) {
-        self.gfx_static_mesh.receive_event(entity_id, component);
+    fn receive_event(&mut self, entity_id: EntityId, component: &Component) {
         self.sim_camera.receive_event(entity_id, component);
         self.sim_physics.receive_event(entity_id, component);
+        self.gfx_static_mesh.receive_event(entity_id, component);
     }
 }

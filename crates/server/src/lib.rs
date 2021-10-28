@@ -1,8 +1,6 @@
-use std::pin::Pin;
-
 use component::Component;
 use event::{EventListener, EventManager};
-use task::Executor;
+use task::{run_parallel, Executor};
 
 use crate::entity::Entity;
 
@@ -45,12 +43,19 @@ impl Server {
 
     fn simulate(&mut self) {
         const UPDATE_INTERVAL: std::time::Duration = std::time::Duration::from_micros(16_666);
+        let delta_time = UPDATE_INTERVAL.as_secs_f32();
 
         let time_now = std::time::Instant::now();
         while time_now.duration_since(self.last_update) > UPDATE_INTERVAL {
             self.last_update += UPDATE_INTERVAL;
-            let mut task = self.systems.simulate();
-            self.task_executor.execute_blocking(&mut task);
+
+            let mut frame_task = async {
+                let mut physics = self.systems.sim_physics.simulate(delta_time);
+
+                run_parallel([&mut physics]).await;
+            };
+
+            self.task_executor.execute_blocking(&mut frame_task);
         }
     }
 
@@ -60,7 +65,7 @@ impl Server {
 
     fn load_level(&mut self) {
         self.entities
-            .push(entity::create_static_mesh(0, &mut self.systems));
+            .push(entity::static_mesh(0, &mut self.systems));
     }
 
     fn shutdown(&mut self) {
@@ -71,25 +76,19 @@ impl Server {
 }
 
 pub struct Systems {
-    physics: sim_physics::System,
+    sim_physics: sim_physics::System,
 }
 
 impl Systems {
     pub fn new() -> Self {
         Self {
-            physics: sim_physics::System::new(),
+            sim_physics: sim_physics::System::new(),
         }
-    }
-
-    pub async fn simulate(&mut self) {
-        let physics = self.physics.simulate();
-
-        physics.await;
     }
 }
 
 impl EventListener for Systems {
-    fn receive_event(&mut self, entity_id: ::entity::EntityID, component: &Component) {
-        self.physics.receive_event(entity_id, component);
+    fn receive_event(&mut self, entity_id: ::entity::EntityId, component: &Component) {
+        self.sim_physics.receive_event(entity_id, component);
     }
 }

@@ -1,14 +1,13 @@
-use component::{Component, Location};
+use component::Component;
 use data::ComponentArray;
-use entity::EntityID;
+use entity::EntityId;
 use event::{push_event, EventListener};
-use nalgebra_glm as glm;
-use system::SubsystemType;
+use nalgebra_glm::{vec2_to_vec3, Vec3};
 use task::run_slice;
 
 struct ComponentData {
-    location: Location,
-    velocity: glm::Vec3,
+    location: Vec3,
+    velocity: Vec3,
 }
 
 pub struct System {
@@ -22,29 +21,27 @@ impl System {
         }
     }
 
-    pub fn create_component(&mut self, entity_id: EntityID) {
+    pub fn create_component(&mut self, entity_id: EntityId) {
         self.data.push(
             entity_id,
             ComponentData {
-                location: glm::Vec3::zeros(),
-                velocity: glm::Vec3::zeros(),
+                location: Vec3::zeros(),
+                velocity: Vec3::zeros(),
             },
         );
     }
 
-    pub fn destroy_component(&mut self, entity_id: EntityID) {
+    pub fn destroy_component(&mut self, entity_id: EntityId) {
         self.data.remove(entity_id);
     }
 
-    pub async fn simulate(&mut self) {
+    pub async fn simulate(&mut self, delta_time: f32) {
         run_slice(self.data.as_mut_slice(), |component| {
-            component.data.location +=
-                component.data.velocity * std::time::Duration::from_micros(16_666).as_secs_f32();
+            component.data.location += component.data.velocity * delta_time;
 
             push_event(
                 component.entity_id,
                 Component::Location(component.data.location),
-                SubsystemType::Physics,
             );
         })
         .await;
@@ -52,16 +49,11 @@ impl System {
 }
 
 impl EventListener for System {
-    fn receive_event(&mut self, entity_id: EntityID, component: &Component) {
-        if !self.data.contains_entity(entity_id) {
-            return;
-        }
-
+    fn receive_event(&mut self, _: EntityId, component: &Component) {
         match component {
             Component::InputAcceleration(acceleration) => {
                 for component in &mut self.data {
-                    component.data.velocity.x = acceleration.x;
-                    component.data.velocity.y = acceleration.y;
+                    component.data.velocity = vec2_to_vec3(acceleration);
                 }
             }
             _ => {}

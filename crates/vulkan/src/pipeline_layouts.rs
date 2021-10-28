@@ -1,11 +1,11 @@
 use super::descriptor_set_layouts::DescriptorSetLayouts;
 use super::VulkanInfo;
 use ash::{version::DeviceV1_0, vk};
-use nalgebra_glm as glm;
+use nalgebra_glm::Mat4;
 
 pub struct SceneData {
-    pub proj_matrix: glm::Mat4,
-    pub view_matrix: glm::Mat4,
+    pub proj_matrix: Mat4,
+    pub view_matrix: Mat4,
 }
 
 pub struct PipelineLayouts {

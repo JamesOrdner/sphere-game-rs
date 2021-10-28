@@ -1,13 +1,13 @@
-use nalgebra_glm as glm;
+use nalgebra_glm::{vec2, vec3, Vec2, Vec3};
 use std::convert::TryFrom;
 
 const MESHES_DIR: &'static str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../res/meshes");
 
 #[derive(Clone, Copy)]
 pub struct Vertex {
-    pub position: glm::Vec3,
-    pub normal: glm::Vec3,
-    pub tex_coord: glm::Vec2,
+    pub position: Vec3,
+    pub normal: Vec3,
+    pub tex_coord: Vec2,
 }
 
 pub struct Mesh {
@@ -84,9 +84,9 @@ impl Mesh {
 
             for i in 0..positions.len() {
                 vertices.push(Vertex {
-                    position: glm::vec3(positions[i][0], positions[i][1], positions[i][2]),
-                    normal: glm::vec3(normals[i][0], normals[i][1], normals[i][2]),
-                    tex_coord: glm::vec2(tex_coords[i][0], tex_coords[i][1]),
+                    position: vec3(positions[i][0], positions[i][1], positions[i][2]),
+                    normal: vec3(normals[i][0], normals[i][1], normals[i][2]),
+                    tex_coord: vec2(tex_coords[i][0], tex_coords[i][1]),
                 });
             }
 

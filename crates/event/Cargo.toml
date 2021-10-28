@@ -6,4 +6,3 @@ edition = "2021"
 [dependencies]
 component = { path = "../component" }
 entity = { path = "../entity" }
-system = { path = "../system" }

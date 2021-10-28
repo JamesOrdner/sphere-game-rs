@@ -1,13 +1,11 @@
 use std::thread::{self, ThreadId};
 
 use component::Component;
-use entity::EntityID;
-use system::SubsystemType;
+use entity::EntityId;
 
 struct Event {
     pub component: Component,
-    pub entity_id: EntityID,
-    pub system_type: SubsystemType,
+    pub entity_id: EntityId,
 }
 
 struct EventSender {
@@ -21,24 +19,23 @@ impl EventSender {
         }
     }
 
-    pub fn push(&mut self, entity_id: EntityID, component: Component, system_type: SubsystemType) {
+    pub fn push(&mut self, entity_id: EntityId, component: Component) {
         self.event_queue.push(Event {
             entity_id,
             component,
-            system_type,
         });
     }
 }
 
 static mut EVENT_SENDERS: Vec<(ThreadId, EventSender)> = Vec::new();
 
-pub fn push_event(entity_id: EntityID, component: Component, system_type: SubsystemType) {
+pub fn push_event(entity_id: EntityId, component: Component) {
     let thread_id = thread::current().id();
 
     unsafe {
         for event_sender in &mut EVENT_SENDERS {
             if event_sender.0 == thread_id {
-                event_sender.1.push(entity_id, component, system_type);
+                event_sender.1.push(entity_id, component);
                 return;
             }
         }
@@ -61,11 +58,11 @@ impl EventManager {
         Self {}
     }
 
-    pub fn distribute(&mut self, systems: &mut dyn EventListener) {
+    pub fn distribute(&mut self, listener: &mut dyn EventListener) {
         unsafe {
             for event_sender in &mut EVENT_SENDERS {
                 for event in &mut event_sender.1.event_queue {
-                    systems.receive_event(event.entity_id, &event.component);
+                    listener.receive_event(event.entity_id, &event.component);
                 }
                 event_sender.1.event_queue.clear();
             }
@@ -74,5 +71,5 @@ impl EventManager {
 }
 
 pub trait EventListener {
-    fn receive_event(&mut self, entity_id: EntityID, component: &Component);
+    fn receive_event(&mut self, entity_id: EntityId, component: &Component);
 }

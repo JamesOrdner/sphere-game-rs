@@ -1,9 +1,6 @@
-use nalgebra_glm as glm;
-
-pub type InputAcceleration = glm::Vec2;
-pub type Location = glm::Vec3;
+use nalgebra_glm::{Vec2, Vec3};
 
 pub enum Component {
-    InputAcceleration(InputAcceleration),
-    Location(Location),
+    InputAcceleration(Vec2),
+    Location(Vec3),
 }

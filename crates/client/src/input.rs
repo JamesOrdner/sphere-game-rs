@@ -1,11 +1,10 @@
-use component::{Component, InputAcceleration};
+use component::Component;
 use event::push_event;
-use nalgebra_glm as glm;
-use system::SubsystemType;
+use nalgebra_glm::Vec2;
 use winit::event::{ElementState, Event as InputEvent, ScanCode, WindowEvent};
 
 pub struct System {
-    input_acceleration: InputAcceleration,
+    input_acceleration: Vec2,
     w_held: bool,
     a_held: bool,
     s_held: bool,
@@ -15,7 +14,7 @@ pub struct System {
 impl System {
     pub fn new() -> Self {
         Self {
-            input_acceleration: glm::Vec2::zeros(),
+            input_acceleration: Vec2::zeros(),
             w_held: false,
             a_held: false,
             s_held: false,
@@ -41,11 +40,7 @@ impl System {
     }
 
     pub async fn flush_input(&self) {
-        push_event(
-            0,
-            Component::InputAcceleration(self.input_acceleration),
-            SubsystemType::Input,
-        );
+        push_event(0, Component::InputAcceleration(self.input_acceleration));
     }
 
     fn handle_keypress(&mut self, scancode: ScanCode, state: ElementState) {

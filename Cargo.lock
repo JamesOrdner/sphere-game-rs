@@ -131,7 +131,6 @@ dependencies = [
  "nalgebra-glm",
  "sim_camera",
  "sim_physics",
- "system",
  "task",
  "winit",
 ]
@@ -433,7 +432,6 @@ version = "0.0.0"
 dependencies = [
  "component",
  "entity",
- "system",
 ]
 
 [[package]]
@@ -1122,7 +1120,6 @@ dependencies = [
  "entity",
  "event",
  "nalgebra-glm",
- "system",
  "task",
 ]
 
@@ -1135,7 +1132,6 @@ dependencies = [
  "entity",
  "event",
  "nalgebra-glm",
- "system",
  "task",
 ]
 

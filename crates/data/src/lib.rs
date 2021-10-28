@@ -3,16 +3,16 @@ use std::{
     ops::{Index, IndexMut},
 };
 
-use entity::EntityID;
+use entity::EntityId;
 
 pub struct DataEntry<T> {
     pub data: T,
-    pub entity_id: EntityID,
+    pub entity_id: EntityId,
 }
 
 pub struct ComponentArray<T> {
     data: Vec<DataEntry<T>>,
-    map: HashMap<EntityID, usize>,
+    map: HashMap<EntityId, usize>,
 }
 
 impl<T> ComponentArray<T> {
@@ -23,14 +23,14 @@ impl<T> ComponentArray<T> {
         }
     }
 
-    pub fn push(&mut self, entity_id: EntityID, data: T) -> &mut T {
+    pub fn push(&mut self, entity_id: EntityId, data: T) -> &mut T {
         debug_assert!(!self.map.contains_key(&entity_id));
         self.map.insert(entity_id, self.data.len());
         self.data.push(DataEntry::<T> { data, entity_id });
         &mut self.data.last_mut().unwrap().data
     }
 
-    pub fn remove(&mut self, entity_id: EntityID) -> T {
+    pub fn remove(&mut self, entity_id: EntityId) -> T {
         debug_assert!(self.map.contains_key(&entity_id));
         let index = self.map[&entity_id];
         self.map.remove(&entity_id);
@@ -46,7 +46,7 @@ impl<T> ComponentArray<T> {
         self.data.len()
     }
 
-    pub fn contains_entity(&self, entity_id: EntityID) -> bool {
+    pub fn contains_entity(&self, entity_id: EntityId) -> bool {
         self.map.contains_key(&entity_id)
     }
 
@@ -55,18 +55,18 @@ impl<T> ComponentArray<T> {
     }
 }
 
-impl<T> Index<EntityID> for ComponentArray<T> {
+impl<T> Index<EntityId> for ComponentArray<T> {
     type Output = DataEntry<T>;
 
-    fn index(&self, entity_id: EntityID) -> &Self::Output {
+    fn index(&self, entity_id: EntityId) -> &Self::Output {
         debug_assert!(self.map.contains_key(&entity_id));
         let index = self.map[&entity_id];
         &self.data[index]
     }
 }
 
-impl<T> IndexMut<EntityID> for ComponentArray<T> {
-    fn index_mut(&mut self, entity_id: EntityID) -> &mut Self::Output {
+impl<T> IndexMut<EntityId> for ComponentArray<T> {
+    fn index_mut(&mut self, entity_id: EntityId) -> &mut Self::Output {
         debug_assert!(self.map.contains_key(&entity_id));
         let index = self.map[&entity_id];
         &mut self.data[index]

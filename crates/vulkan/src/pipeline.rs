@@ -2,7 +2,7 @@ use super::mesh::Vertex;
 use super::swapchain::Swapchain;
 use super::VulkanInfo;
 use ash::{version::DeviceV1_0, vk};
-use nalgebra_glm as glm;
+use nalgebra_glm::Vec3;
 use std::ffi::{CStr, CString};
 use std::fs::File;
 use std::mem::size_of;
@@ -37,12 +37,12 @@ impl Pipeline {
             vk::VertexInputAttributeDescription::builder()
                 .location(1)
                 .format(vk::Format::R32G32B32_SFLOAT)
-                .offset(size_of::<glm::Vec3>() as u32)
+                .offset(size_of::<Vec3>() as u32)
                 .build(),
             vk::VertexInputAttributeDescription::builder()
                 .location(2)
                 .format(vk::Format::R32G32_SFLOAT)
-                .offset((size_of::<glm::Vec3>() * 2) as u32)
+                .offset((size_of::<Vec3>() * 2) as u32)
                 .build(),
         ];
 

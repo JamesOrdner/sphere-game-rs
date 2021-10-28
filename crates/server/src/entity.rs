@@ -1,10 +1,10 @@
-use entity::EntityID;
+use entity::EntityId;
 
 use crate::Systems;
 
 pub struct Entity {
-    pub entity_id: EntityID,
-    destructor: fn(EntityID, &mut Systems),
+    pub entity_id: EntityId,
+    destructor: fn(EntityId, &mut Systems),
 }
 
 impl Entity {
@@ -13,15 +13,13 @@ impl Entity {
     }
 }
 
-pub fn create_static_mesh(entity_id: EntityID, systems: &mut Systems) -> Entity {
-    systems.physics.create_component(entity_id);
+pub fn static_mesh(entity_id: EntityId, systems: &mut Systems) -> Entity {
+    systems.sim_physics.create_component(entity_id);
 
     Entity {
         entity_id,
-        destructor: destroy_static_mesh,
+        destructor: |entity_id, systems| {
+            systems.sim_physics.destroy_component(entity_id);
+        },
     }
-}
-
-fn destroy_static_mesh(entity_id: EntityID, systems: &mut Systems) {
-    systems.physics.destroy_component(entity_id);
 }
