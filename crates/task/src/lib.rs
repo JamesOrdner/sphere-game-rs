@@ -51,16 +51,15 @@ struct TaskPtr {
 unsafe impl Send for TaskPtr {}
 
 struct Task {
-    future: Pin<&'static mut (dyn Future<Output = ()>)>,
+    future: Pin<&'static mut dyn Future<Output = ()>>,
     join_handle: *const TaskJoinHandle,
 }
 
 impl Task {
-    fn new(future: Pin<&mut (dyn Future<Output = ()>)>) -> Self {
+    fn new(future: Pin<&mut dyn Future<Output = ()>>) -> Self {
         // SAFETY: run_batch() always joins futures before returning
-        let future = unsafe {
-            std::mem::transmute::<_, Pin<&'static mut (dyn Future<Output = ()>)>>(future)
-        };
+        let future =
+            unsafe { std::mem::transmute::<_, Pin<&'static mut dyn Future<Output = ()>>>(future) };
 
         Self {
             future,
