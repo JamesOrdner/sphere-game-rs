@@ -29,6 +29,20 @@ lazy_static! {
     };
 }
 
+macro_rules! pin_array {
+    ($arr: ident, $len: expr) => {
+        let $arr = {
+            unsafe {
+                let mut x: [MaybeUninit<_>; $len] = MaybeUninit::uninit().assume_init();
+                for (i, a) in $arr.iter_mut().enumerate() {
+                    x[i].write(Pin::new_unchecked(a));
+                }
+                x.map(|a| a.assume_init())
+            }
+        };
+    };
+}
+
 struct TaskPtr {
     inner: *mut Task,
 }
@@ -193,7 +207,10 @@ impl Executor {
         (executor, thread_ids.into_inner().unwrap())
     }
 
-    pub fn execute_blocking<F: Future<Output = ()>>(&self, future: Pin<&mut F>) {
+    pub fn execute_blocking(&self, future: &mut dyn Future<Output = ()>) {
+        // guaranteed not to move in the scope of this function
+        let future = unsafe { Pin::new_unchecked(future) };
+
         let mut task = Task::new(future);
         let task = unsafe { Pin::new_unchecked(&mut task) };
 
@@ -223,20 +240,6 @@ impl Drop for Executor {
     }
 }
 
-macro_rules! pin_array {
-    ($arr: ident, $len: expr) => {
-        let $arr = {
-            unsafe {
-                let mut x: [MaybeUninit<_>; $len] = MaybeUninit::uninit().assume_init();
-                for (i, a) in $arr.iter_mut().enumerate() {
-                    x[i].write(Pin::new_unchecked(a));
-                }
-                x.map(|a| a.assume_init())
-            }
-        };
-    };
-}
-
 pub async fn run_batch<F: Fn(usize), const N: usize>(f: F) {
     let f = &f;
     let f_async = |index: usize| async move { f(index) };
@@ -249,6 +252,36 @@ pub async fn run_batch<F: Fn(usize), const N: usize>(f: F) {
         futures.map(|a| a.assume_init())
     };
     pin_array!(futures, N);
+
+    let mut tasks = unsafe {
+        let mut tasks: [MaybeUninit<_>; N] = MaybeUninit::uninit().assume_init();
+        for (i, future) in futures.into_iter().enumerate() {
+            tasks[i].write(Task::new(future));
+        }
+        tasks.map(|a| a.assume_init())
+    };
+    pin_array!(tasks, N);
+
+    let mut join_handles = unsafe {
+        let mut join_handles: [MaybeUninit<_>; N] = MaybeUninit::uninit().assume_init();
+        for i in 0..N {
+            join_handles[i].write(TaskJoinHandle::new());
+        }
+        join_handles.map(|a| a.assume_init())
+    };
+    pin_array!(join_handles, N);
+
+    for (i, task) in tasks.into_iter().enumerate() {
+        task.run(&join_handles[i]);
+    }
+
+    for join_handle in join_handles {
+        join_handle.await;
+    }
+}
+
+pub async fn run_parallel<const N: usize>(futures: [&mut dyn Future<Output = ()>; N]) {
+    let futures = unsafe { futures.map(|a| Pin::new_unchecked(a)) };
 
     let mut tasks = unsafe {
         let mut tasks: [MaybeUninit<_>; N] = MaybeUninit::uninit().assume_init();

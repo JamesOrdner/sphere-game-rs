@@ -50,8 +50,7 @@ impl Server {
         while time_now.duration_since(self.last_update) > UPDATE_INTERVAL {
             self.last_update += UPDATE_INTERVAL;
             let mut task = self.systems.simulate();
-            let task = unsafe { Pin::new_unchecked(&mut task) };
-            self.task_executor.execute_blocking(task);
+            self.task_executor.execute_blocking(&mut task);
         }
     }
 

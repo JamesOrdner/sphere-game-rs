@@ -1,8 +1,6 @@
-use std::pin::Pin;
-
 use component::Component;
 use event::{EventListener, EventManager};
-use task::Executor;
+use task::{run_parallel, Executor};
 use winit::{
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
@@ -39,11 +37,6 @@ impl Client {
     }
 
     pub fn run(mut self, event_loop: EventLoop<()>) -> ! {
-        println!(
-            "{}",
-            std::mem::size_of_val(&self.systems.simulate_and_render())
-        );
-
         self.load_level();
         self.last_update = std::time::Instant::now();
 
@@ -60,9 +53,7 @@ impl Client {
                     return;
                 }
 
-                self.flush_input();
-                self.distribute_events();
-                self.simulate_and_render();
+                self.frame();
             }
             event => {
                 self.systems.input.handle_input(event);
@@ -72,36 +63,38 @@ impl Client {
 
     fn flush_input(&mut self) {
         let mut task = self.systems.input.flush_input();
-        let task = unsafe { Pin::new_unchecked(&mut task) };
-        self.task_executor.execute_blocking(task);
+        self.task_executor.execute_blocking(&mut task);
     }
 
     fn distribute_events(&mut self) {
         self.event_manager.distribute(&mut self.systems);
     }
 
-    // fn simulate(&mut self) {
-    //     const UPDATE_INTERVAL: std::time::Duration = std::time::Duration::from_micros(16_666);
+    fn frame(&mut self) {
+        const UPDATE_INTERVAL: std::time::Duration = std::time::Duration::from_micros(16_666);
 
-    //     let time_now = std::time::Instant::now();
-    //     while time_now.duration_since(self.last_update) > UPDATE_INTERVAL {
-    //         self.last_update += UPDATE_INTERVAL;
-    //         let mut task = self.systems.simulate();
-    //         let task = unsafe { Pin::new_unchecked(&mut task) };
-    //         self.task_executor.execute_blocking(task);
-    //     }
-    // }
+        self.flush_input();
+        self.distribute_events();
 
-    // fn render(&mut self) {
-    //     let mut task = self.systems.render();
-    //     let task = unsafe { Pin::new_unchecked(&mut task) };
-    //     self.task_executor.execute_blocking(task);
-    // }
+        let mut frame_task = async {
+            let mut simulation = async {
+                let time_now = std::time::Instant::now();
+                while time_now.duration_since(self.last_update) > UPDATE_INTERVAL {
+                    self.last_update += UPDATE_INTERVAL;
 
-    fn simulate_and_render(&mut self) {
-        let mut task = self.systems.simulate_and_render();
-        let task = unsafe { Pin::new_unchecked(&mut task) };
-        self.task_executor.execute_blocking(task);
+                    let mut sim_camera = self.systems.sim_camera.simulate();
+                    let mut sim_physics = self.systems.sim_physics.simulate();
+
+                    run_parallel([&mut sim_camera, &mut sim_physics]).await;
+                }
+            };
+
+            let mut graphics = self.systems.gfx_static_mesh.render();
+
+            run_parallel([&mut simulation, &mut graphics]).await;
+        };
+
+        self.task_executor.execute_blocking(&mut frame_task);
     }
 
     fn load_level(&mut self) {
@@ -119,54 +112,20 @@ impl Client {
 }
 
 pub struct Systems {
-    input: input::System,
-    gfx_static_mesh: gfx_static_mesh::System,
-    sim_camera: sim_camera::System,
-    sim_physics: sim_physics::System,
+    pub input: input::System,
+    pub sim_camera: sim_camera::System,
+    pub sim_physics: sim_physics::System,
+    pub gfx_static_mesh: gfx_static_mesh::System,
 }
 
 impl Systems {
     pub fn new(window: Window) -> Self {
         Self {
             input: input::System::new(),
-            gfx_static_mesh: gfx_static_mesh::System::new(window),
             sim_camera: sim_camera::System::new(),
             sim_physics: sim_physics::System::new(),
+            gfx_static_mesh: gfx_static_mesh::System::new(window),
         }
-    }
-
-    pub async fn simulate(&mut self) {
-        let camera = self.sim_camera.simulate();
-        let physics = self.sim_physics.simulate();
-
-        camera.await;
-        physics.await;
-    }
-
-    pub async fn render(&mut self) {
-        let static_mesh = self.gfx_static_mesh.render();
-
-        static_mesh.await;
-    }
-
-    pub async fn simulate_and_render(&mut self) {
-        let simulate = async {
-            let camera = self.sim_camera.simulate();
-            let physics = self.sim_physics.simulate();
-
-            camera.await;
-            physics.await;
-        };
-
-        let render = async {
-            let static_mesh = self.gfx_static_mesh.render();
-
-            static_mesh.await;
-        };
-
-        // todo: join rather than await sequentially
-        simulate.await;
-        render.await;
     }
 }
 
