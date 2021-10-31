@@ -127,6 +127,7 @@ dependencies = [
  "component",
  "entity",
  "event",
+ "gfx",
  "gfx_static_mesh",
  "nalgebra-glm",
  "sim_camera",
@@ -456,6 +457,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "00b0228411908ca8685dba7fc2cdd70ec9990a6e753e89b6ac91a84c40fbaf4b"
 
 [[package]]
+name = "gfx"
+version = "0.0.0"
+dependencies = [
+ "nalgebra-glm",
+ "vulkan",
+ "winit",
+]
+
+[[package]]
 name = "gfx_static_mesh"
 version = "0.0.0"
 dependencies = [
@@ -463,9 +473,8 @@ dependencies = [
  "data",
  "entity",
  "event",
+ "gfx",
  "nalgebra-glm",
- "vulkan",
- "winit",
 ]
 
 [[package]]

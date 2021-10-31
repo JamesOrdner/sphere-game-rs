@@ -1,0 +1,10 @@
+[package]
+name = "gfx"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+nalgebra-glm = "0.15"
+winit = "0.25"
+
+vulkan = { path = "../vulkan" }

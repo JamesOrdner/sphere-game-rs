@@ -29,17 +29,16 @@ impl Swapchain {
 
         let surface_extent = surface_capabilities.current_extent;
 
-        let mut surface_format = device_surface_formats
+        let mut surface_format = *device_surface_formats
             .first()
-            .expect("Vulkan: No valid swapchain surface formats.")
-            .clone();
+            .expect("Vulkan: No valid swapchain surface formats.");
 
         // search for preferred image format
         for device_surface_format in &device_surface_formats {
             if device_surface_format.format == vk::Format::B8G8R8_UNORM
                 && device_surface_format.color_space == vk::ColorSpaceKHR::SRGB_NONLINEAR
             {
-                surface_format = device_surface_format.clone();
+                surface_format = *device_surface_format;
                 break;
             }
         }

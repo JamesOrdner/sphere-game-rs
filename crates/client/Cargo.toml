@@ -10,6 +10,7 @@ winit = "0.25"
 component = { path = "../component" }
 entity = { path = "../entity" }
 event = { path = "../event" }
+gfx = { path = "../gfx" }
 gfx_static_mesh = { path = "../gfx_static_mesh" }
 sim_camera = { path = "../sim_camera" }
 sim_physics = { path = "../sim_physics" }

@@ -1,6 +1,7 @@
 use ::entity::EntityId;
 use component::Component;
 use event::{EventListener, EventManager};
+use gfx::Graphics;
 use task::{run_parallel, Executor};
 use winit::{
     event::{Event, WindowEvent},
@@ -18,12 +19,13 @@ pub struct Client {
     task_executor: Executor,
     last_update: std::time::Instant,
     entities: Vec<Entity>,
+    graphics: Graphics,
     systems: Systems,
 }
 
 impl Client {
     pub fn new(event_loop: &EventLoop<()>) -> Self {
-        let window = Window::new(&event_loop).unwrap();
+        let window = Window::new(event_loop).unwrap();
 
         let (task_executor, thread_ids) = Executor::new();
         let event_manager = EventManager::new(thread_ids);
@@ -33,7 +35,8 @@ impl Client {
             task_executor,
             last_update: std::time::Instant::now(),
             entities: Vec::new(),
-            systems: Systems::new(window),
+            graphics: Graphics::new(window),
+            systems: Systems::new(),
         }
     }
 
@@ -88,20 +91,31 @@ impl Client {
             };
 
             let mut graphics = async {
-                let mut static_mesh = self.systems.gfx_static_mesh.render();
+                self.graphics.frame_begin().await;
 
-                run_parallel([&mut static_mesh]).await;
+                {
+                    let gfx_delegate = self.graphics.gfx_delegate();
+
+                    let mut static_mesh = self.systems.gfx_static_mesh.render(&gfx_delegate);
+
+                    run_parallel([&mut static_mesh]).await;
+                }
+
+                self.graphics.frame_end().await;
             };
 
             run_parallel([&mut simulation, &mut graphics]).await;
         };
 
+        // println!("{}", std::mem::size_of_val(&frame_task));
+
         self.task_executor.execute_blocking(&mut frame_task);
     }
 
     fn load_level(&mut self) {
+        let static_mesh = self.graphics.create_static_mesh("suzanne");
         self.entities
-            .push(entity::static_mesh(10, &mut self.systems));
+            .push(entity::static_mesh(10, &mut self.systems, static_mesh));
         self.entities.push(entity::camera(20, &mut self.systems));
     }
 
@@ -120,12 +134,12 @@ pub struct Systems {
 }
 
 impl Systems {
-    pub fn new(window: Window) -> Self {
+    pub fn new() -> Self {
         Self {
             input: input::System::new(),
             sim_camera: sim_camera::System::new(),
             sim_physics: sim_physics::System::new(),
-            gfx_static_mesh: gfx_static_mesh::System::new(window),
+            gfx_static_mesh: gfx_static_mesh::System::new(),
         }
     }
 }

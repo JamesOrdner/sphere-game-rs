@@ -3,8 +3,7 @@ use server::Server;
 use winit::event_loop::EventLoop;
 
 fn main() {
-    let args: Vec<String> = std::env::args().collect();
-    if args.contains(&"--server".to_string()) {
+    if std::env::args().any(|arg| arg == "--server") {
         let server = Server::new();
         server.run();
     } else {

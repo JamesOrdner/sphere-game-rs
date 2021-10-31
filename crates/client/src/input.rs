@@ -23,20 +23,18 @@ impl System {
     }
 
     pub fn handle_input(&mut self, event: InputEvent<()>) {
-        match event {
-            InputEvent::WindowEvent {
-                event:
-                    WindowEvent::KeyboardInput {
-                        input,
-                        is_synthetic: false,
-                        ..
-                    },
-                ..
-            } => {
-                self.handle_keypress(input.scancode, input.state);
-            }
-            _ => {}
-        };
+        if let InputEvent::WindowEvent {
+            event:
+                WindowEvent::KeyboardInput {
+                    input,
+                    is_synthetic: false,
+                    ..
+                },
+            ..
+        } = event
+        {
+            self.handle_keypress(input.scancode, input.state);
+        }
     }
 
     pub async fn flush_input(&self) {

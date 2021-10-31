@@ -233,6 +233,7 @@ fn get_physical_device_queue_families_info(
     let mut transfer_family_index = None;
 
     for (i, queue_family_properties) in physical_device_queue_family_properties.iter().enumerate() {
+        let i = i as u32;
         let has_graphics_support = queue_family_properties
             .queue_flags
             .contains(vk::QueueFlags::GRAPHICS);
@@ -248,10 +249,8 @@ fn get_physical_device_queue_families_info(
                 .unwrap()
         };
 
-        if has_graphics_support {
-            if graphics_family_index == None {
-                graphics_family_index = Some(i);
-            }
+        if has_graphics_support && graphics_family_index.is_none() {
+            graphics_family_index = Some(i);
         }
 
         if has_present_support {
@@ -264,26 +263,25 @@ fn get_physical_device_queue_families_info(
             }
         }
 
-        if has_transfer_support {
-            if transfer_family_index == None {
-                transfer_family_index = Some(i);
-            } else if graphics_family_index != Some(i) && !has_compute_support {
-                // prefer dedicated transfer queue family
-                transfer_family_index = Some(i);
-            }
+        if has_transfer_support
+            && (transfer_family_index.is_none()
+                || (graphics_family_index != Some(i) && !has_compute_support))
+        {
+            transfer_family_index = Some(i);
         }
     }
 
-    if graphics_family_index.is_none()
-        || present_family_index.is_none()
-        || transfer_family_index.is_none()
-    {
-        None
-    } else {
+    if let (Some(graphics_family_index), Some(present_family_index), Some(transfer_family_index)) = (
+        graphics_family_index,
+        present_family_index,
+        transfer_family_index,
+    ) {
         Some(QueueFamiliesInfo {
-            graphics_family_index: graphics_family_index.unwrap() as u32,
-            present_family_index: present_family_index.unwrap() as u32,
-            transfer_family_index: transfer_family_index.unwrap() as u32,
+            graphics_family_index,
+            present_family_index,
+            transfer_family_index,
         })
+    } else {
+        None
     }
 }

@@ -5,10 +5,9 @@ edition = "2021"
 
 [dependencies]
 nalgebra-glm = "0.15"
-winit = "0.25"
 
 component = { path = "../component" }
 data = { path = "../data" }
 entity = { path = "../entity" }
 event = { path = "../event" }
-vulkan = { path = "../vulkan" }
+gfx = { path = "../gfx" }

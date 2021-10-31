@@ -6,7 +6,7 @@ use nalgebra_glm::Vec3;
 use std::ffi::{CStr, CString};
 use std::fs::File;
 use std::mem::size_of;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 pub struct Pipeline {
     pipeline: vk::Pipeline,
@@ -142,7 +142,7 @@ struct Shader<'a> {
     frag_shader_module: vk::ShaderModule,
 }
 
-const SHADERS_DIR: &'static str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../res/shaders");
+const SHADERS_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../res/shaders");
 
 impl<'a> Shader<'a> {
     fn new(vulkan: &'a VulkanInfo, name: &str, entry: &'a CStr) -> Self {
@@ -191,7 +191,7 @@ impl<'a> Drop for Shader<'a> {
     }
 }
 
-fn read_shader_file(path: &PathBuf) -> std::io::Result<Vec<u32>> {
+fn read_shader_file(path: &Path) -> std::io::Result<Vec<u32>> {
     let mut file = File::open(path).expect("Vulkan: Failed to open shader file.");
     ash::util::read_spv(&mut file)
 }

@@ -2,138 +2,49 @@ use component::Component;
 use data::ComponentArray;
 use entity::EntityId;
 use event::EventListener;
-use nalgebra_glm::{self as glm, Mat4, Vec3};
-use vulkan::{mesh::Mesh, InstanceData};
-use winit::window::Window;
+use gfx::{GfxDelegate, StaticMesh};
+use nalgebra_glm::{translate, Mat4, Vec3};
 
 struct StaticMeshComponent {
-    loaded_mesh_index: Option<usize>,
+    static_mesh: StaticMesh,
     location: Vec3,
-}
-
-struct LoadedMesh {
-    name: String,
-    vertex_buffer: vulkan::VertexBuffer,
-    ref_count: usize,
 }
 
 pub struct System {
     components: ComponentArray<StaticMeshComponent>,
-    vulkan: vulkan::Vulkan,
-    loaded_meshes: Vec<LoadedMesh>,
 }
 
 impl System {
-    pub fn new(window: Window) -> Self {
+    pub fn new() -> Self {
         Self {
             components: ComponentArray::new(),
-            vulkan: vulkan::Vulkan::new(window),
-            loaded_meshes: Vec::new(),
         }
     }
 
-    pub fn create_component(&mut self, entity_id: EntityId, mesh_name: &str) {
-        let mesh = match self.find_mesh(mesh_name) {
-            Some(mesh) => Some(mesh),
-            None => self.load_mesh(mesh_name),
-        };
-
-        let loaded_mesh_index = match mesh {
-            Some(mesh) => {
-                mesh.1.ref_count += 1;
-                Some(mesh.0)
-            }
-            None => None,
-        };
-
+    pub fn create_component(&mut self, entity_id: EntityId, static_mesh: StaticMesh) {
         self.components.push(
             entity_id,
             StaticMeshComponent {
-                loaded_mesh_index,
+                static_mesh,
                 location: Vec3::zeros(),
             },
         );
     }
 
     pub fn destroy_component(&mut self, entity_id: EntityId) {
-        let component_data = self.components.remove(entity_id);
-        if let Some(loaded_mesh_index) = component_data.loaded_mesh_index {
-            debug_assert!(self.loaded_meshes[loaded_mesh_index].ref_count > 0);
-            self.loaded_meshes[loaded_mesh_index].ref_count -= 1;
-            self.garbage_collect_loaded_meshes();
-        }
+        self.components.remove(entity_id);
     }
 
-    fn find_mesh(&mut self, mesh_name: &str) -> Option<(usize, &mut LoadedMesh)> {
-        for (i, loaded_mesh) in self.loaded_meshes.iter_mut().enumerate() {
-            if loaded_mesh.name == mesh_name {
-                return Some((i, loaded_mesh));
-            }
-        }
-
-        None
-    }
-
-    fn load_mesh(&mut self, mesh_name: &str) -> Option<(usize, &mut LoadedMesh)> {
-        match Mesh::import(mesh_name) {
-            Ok(mesh) => {
-                let index = self.loaded_meshes.len();
-                self.loaded_meshes.push(LoadedMesh {
-                    name: mesh_name.to_string(),
-                    vertex_buffer: self.vulkan.load_mesh(&mesh),
-                    ref_count: 0,
-                });
-                let loaded_mesh = self.loaded_meshes.last_mut().unwrap();
-                Some((index, loaded_mesh))
-            }
-            Err(err) => {
-                println!("{}: for '{}'", err, mesh_name);
-                None
-            }
-        }
-    }
-
-    fn garbage_collect_loaded_meshes(&mut self) {
-        let mut index = self.loaded_meshes.len();
-        while index > 0 {
-            index -= 1;
-            if self.loaded_meshes[index].ref_count > 0 {
-                break;
-            }
-            self.vulkan
-                .unload_last_mesh(self.loaded_meshes.pop().unwrap().vertex_buffer);
-        }
-    }
-
-    pub async fn render(&mut self) {
-        self.vulkan.begin_instance_update();
-
-        let proj_matrix = glm::ortho_rh_zo(-2.0, 2.0, 2.0, -2.0, -2.0, 2.0);
-        let view_matrix = Mat4::identity();
-
-        self.vulkan.update_scene(&vulkan::SceneData {
-            proj_matrix,
-            view_matrix,
-        });
-
+    pub async fn render(&mut self, gfx_delegate: &GfxDelegate<'_>) {
         let identity = Mat4::identity();
-        for (component_index, component) in self.components.into_iter().enumerate() {
-            self.vulkan.update_instance(
-                component_index,
-                &InstanceData {
-                    model_matrix: glm::translate(&identity, &component.data.location),
-                },
-            );
+        for component in &self.components {
+            let model_matrix = translate(&identity, &component.data.location);
+            gfx_delegate.update_static_mesh(&component.data.static_mesh, model_matrix);
         }
 
-        for (component_index, component) in self.components.into_iter().enumerate() {
-            if let Some(loaded_mesh_index) = component.data.loaded_mesh_index {
-                let vertex_buffer = &self.loaded_meshes[loaded_mesh_index].vertex_buffer;
-                self.vulkan.draw_instance(component_index, vertex_buffer);
-            }
+        for component in &self.components {
+            gfx_delegate.draw_instance(&component.data.static_mesh);
         }
-
-        self.vulkan.end_instance_update_and_render();
     }
 }
 
@@ -143,11 +54,8 @@ impl EventListener for System {
             return;
         }
 
-        match component {
-            Component::Location(location) => {
-                self.components[entity_id].data.location = *location;
-            }
-            _ => {}
+        if let Component::Location(location) = component {
+            self.components[entity_id].data.location = *location;
         }
     }
 }

@@ -1,4 +1,5 @@
 use entity::EntityId;
+use gfx::StaticMesh;
 
 use crate::Systems;
 
@@ -26,17 +27,21 @@ pub fn camera(entity_id: EntityId, systems: &mut Systems) -> Entity {
     }
 }
 
-pub fn static_mesh(entity_id: EntityId, systems: &mut Systems) -> Entity {
+pub fn static_mesh(
+    entity_id: EntityId,
+    systems: &mut Systems,
+    static_mesh_id: StaticMesh,
+) -> Entity {
+    systems.sim_physics.create_component(entity_id);
     systems
         .gfx_static_mesh
-        .create_component(entity_id, "suzanne");
-    systems.sim_physics.create_component(entity_id);
+        .create_component(entity_id, static_mesh_id);
 
     Entity {
         entity_id,
         destructor: |entity_id, systems| {
-            systems.gfx_static_mesh.destroy_component(entity_id);
             systems.sim_physics.destroy_component(entity_id);
+            systems.gfx_static_mesh.destroy_component(entity_id);
         },
     }
 }
