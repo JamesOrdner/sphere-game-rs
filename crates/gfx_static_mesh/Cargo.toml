@@ -11,3 +11,4 @@ data = { path = "../data" }
 entity = { path = "../entity" }
 event = { path = "../event" }
 gfx = { path = "../gfx" }
+task = { path = "../task" }

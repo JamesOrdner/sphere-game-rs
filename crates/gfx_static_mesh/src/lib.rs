@@ -2,8 +2,9 @@ use component::Component;
 use data::ComponentArray;
 use entity::EntityId;
 use event::EventListener;
-use gfx::{GfxDelegate, StaticMesh};
+use gfx::{gfx_delegate, StaticMesh};
 use nalgebra_glm::{translate, Mat4, Vec3};
+use task::run_slice;
 
 struct StaticMeshComponent {
     static_mesh: StaticMesh,
@@ -35,16 +36,19 @@ impl System {
         self.components.remove(entity_id);
     }
 
-    pub async fn render(&mut self, gfx_delegate: &GfxDelegate<'_>) {
-        let identity = Mat4::identity();
-        for component in &self.components {
-            let model_matrix = translate(&identity, &component.data.location);
+    pub async fn render(&mut self) {
+        run_slice(self.components.as_mut_slice(), |component| {
+            let gfx_delegate = gfx_delegate();
+            let model_matrix = translate(&Mat4::identity(), &component.data.location);
             gfx_delegate.update_static_mesh(&component.data.static_mesh, model_matrix);
-        }
+        })
+        .await;
 
-        for component in &self.components {
+        run_slice(self.components.as_mut_slice(), |component| {
+            let gfx_delegate = gfx_delegate();
             gfx_delegate.draw_instance(&component.data.static_mesh);
-        }
+        })
+        .await;
     }
 }
 

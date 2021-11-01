@@ -21,25 +21,11 @@ struct SyncChannel {
 
 lazy_static! {
     static ref SYNC_CHANNEL: SyncChannel = {
-        let (sender, receiver) = sync_channel(10);
+        let (sender, receiver) = sync_channel(50);
         SyncChannel {
             sender,
             receiver: Mutex::new(receiver),
         }
-    };
-}
-
-macro_rules! pin_array {
-    ($arr: ident, $len: expr) => {
-        let $arr = {
-            unsafe {
-                let mut x: [MaybeUninit<_>; $len] = MaybeUninit::uninit().assume_init();
-                for (i, a) in $arr.iter_mut().enumerate() {
-                    x[i].write(Pin::new_unchecked(a));
-                }
-                x.map(|a| a.assume_init())
-            }
-        };
     };
 }
 
@@ -55,28 +41,29 @@ struct Task {
     join_handle: *const TaskJoinHandle,
 }
 
+/// SAFETY: join_handle is only accessed via a mutex
+unsafe impl Send for Task {}
+
 impl Task {
     fn new(future: Pin<&mut dyn Future<Output = ()>>) -> Self {
-        // SAFETY: run_batch() always joins futures before returning
+        // SAFETY: run_*() functions always join futures before returning
         let future =
             unsafe { std::mem::transmute::<_, Pin<&'static mut dyn Future<Output = ()>>>(future) };
 
         Self {
             future,
-            join_handle: ptr::null_mut(),
+            join_handle: ptr::null(),
         }
     }
 
-    fn run(mut self: Pin<&mut Self>, join_handle: &Pin<&mut TaskJoinHandle>) {
-        // SAFETY: we ensure that join_handle lives as long as self
-        self.join_handle =
-            unsafe { std::mem::transmute::<_, *const TaskJoinHandle>(&**join_handle) };
+    fn run(mut self: Pin<&mut Self>, join_handle: &Pin<&TaskJoinHandle>) {
+        self.join_handle = &**join_handle;
 
         let message = ExecutorMessage::Task(TaskPtr { inner: &mut *self });
 
         SYNC_CHANNEL
             .sender
-            .send(message)
+            .try_send(message)
             .expect("executor channel full");
     }
 
@@ -213,8 +200,8 @@ impl Executor {
         let mut task = Task::new(future);
         let task = unsafe { Pin::new_unchecked(&mut task) };
 
-        let mut join_handle = TaskJoinHandle::new();
-        let join_handle = unsafe { Pin::new_unchecked(&mut join_handle) };
+        let join_handle = TaskJoinHandle::new();
+        let join_handle = unsafe { Pin::new_unchecked(&join_handle) };
 
         task.run(&join_handle);
 
@@ -239,7 +226,21 @@ impl Drop for Executor {
     }
 }
 
-pub async fn run_batch<F: Fn(usize), const N: usize>(f: F) {
+macro_rules! pin_array_mut {
+    ($arr: ident, $len: expr) => {
+        let $arr = {
+            unsafe {
+                let mut x: [MaybeUninit<_>; $len] = MaybeUninit::uninit().assume_init();
+                for (i, a) in $arr.iter_mut().enumerate() {
+                    x[i].write(Pin::new_unchecked(a));
+                }
+                x.map(|a| a.assume_init())
+            }
+        };
+    };
+}
+
+pub async fn run_batch<F: Fn(usize) + Sync, const N: usize>(f: F) {
     let f = &f;
     let f_async = |index: usize| async move { f(index) };
 
@@ -250,7 +251,7 @@ pub async fn run_batch<F: Fn(usize), const N: usize>(f: F) {
         }
         futures.map(|a| a.assume_init())
     };
-    pin_array!(futures, N);
+    pin_array_mut!(futures, N);
 
     let mut tasks = unsafe {
         let mut tasks: [MaybeUninit<_>; N] = MaybeUninit::uninit().assume_init();
@@ -259,7 +260,7 @@ pub async fn run_batch<F: Fn(usize), const N: usize>(f: F) {
         }
         tasks.map(|a| a.assume_init())
     };
-    pin_array!(tasks, N);
+    pin_array_mut!(tasks, N);
 
     let mut join_handles = unsafe {
         let mut join_handles: [MaybeUninit<_>; N] = MaybeUninit::uninit().assume_init();
@@ -268,10 +269,10 @@ pub async fn run_batch<F: Fn(usize), const N: usize>(f: F) {
         }
         join_handles.map(|a| a.assume_init())
     };
-    pin_array!(join_handles, N);
+    pin_array_mut!(join_handles, N);
 
     for (i, task) in tasks.into_iter().enumerate() {
-        task.run(&join_handles[i]);
+        task.run(&join_handles[i].as_ref());
     }
 
     for join_handle in join_handles {
@@ -279,7 +280,7 @@ pub async fn run_batch<F: Fn(usize), const N: usize>(f: F) {
     }
 }
 
-pub async fn run_parallel<const N: usize>(futures: [&mut dyn Future<Output = ()>; N]) {
+pub async fn run_parallel<const N: usize>(futures: [&mut (dyn Future<Output = ()> + Send); N]) {
     let futures = unsafe { futures.map(|a| Pin::new_unchecked(a)) };
 
     let mut tasks = unsafe {
@@ -289,7 +290,7 @@ pub async fn run_parallel<const N: usize>(futures: [&mut dyn Future<Output = ()>
         }
         tasks.map(|a| a.assume_init())
     };
-    pin_array!(tasks, N);
+    pin_array_mut!(tasks, N);
 
     let mut join_handles = unsafe {
         let mut join_handles: [MaybeUninit<_>; N] = MaybeUninit::uninit().assume_init();
@@ -298,10 +299,10 @@ pub async fn run_parallel<const N: usize>(futures: [&mut dyn Future<Output = ()>
         }
         join_handles.map(|a| a.assume_init())
     };
-    pin_array!(join_handles, N);
+    pin_array_mut!(join_handles, N);
 
     for (i, task) in tasks.into_iter().enumerate() {
-        task.run(&join_handles[i]);
+        task.run(&join_handles[i].as_ref());
     }
 
     for join_handle in join_handles {
@@ -309,19 +310,31 @@ pub async fn run_parallel<const N: usize>(futures: [&mut dyn Future<Output = ()>
     }
 }
 
-pub async fn run_slice<T, F: Fn(&mut T)>(slice: &mut [T], f: F) {
+struct PtrWrapper<T: Send>(*mut T);
+
+unsafe impl<T: Send> Send for PtrWrapper<T> {}
+
+impl<T: Send> Copy for PtrWrapper<T> {}
+
+impl<T: Send> Clone for PtrWrapper<T> {
+    fn clone(&self) -> Self {
+        Self(self.0)
+    }
+}
+
+pub async fn run_slice<T: Send, F: Fn(&mut T) + Sync>(slice: &mut [T], f: F) {
     const CONCURRENCY: usize = 8;
     const STRIDE: usize = 8;
 
-    let slice_ptr = slice.as_mut_ptr();
+    let f = &f;
+    let slice_ptr = PtrWrapper(slice.as_mut_ptr());
     let slice_len = slice.len();
 
-    let f = &f;
-    let f_async = |offset: usize| async move {
+    let f_async = |offset: usize, slice_ptr: PtrWrapper<T>| {
         if offset < slice_len {
             let len = usize::min(STRIDE, slice_len - offset);
             for i in 0..len {
-                f(unsafe { &mut *slice_ptr.add(offset + i) });
+                f(unsafe { &mut *slice_ptr.0.add(offset + i) });
             }
         }
     };
@@ -331,12 +344,14 @@ pub async fn run_slice<T, F: Fn(&mut T)>(slice: &mut [T], f: F) {
         let mut futures = unsafe {
             let mut futures: [MaybeUninit<_>; CONCURRENCY] = MaybeUninit::uninit().assume_init();
             for future in futures.iter_mut() {
-                future.write(f_async(offset));
+                future.write(async move {
+                    f_async(offset, slice_ptr);
+                });
                 offset += STRIDE;
             }
             futures.map(|a| a.assume_init())
         };
-        pin_array!(futures, CONCURRENCY);
+        pin_array_mut!(futures, CONCURRENCY);
 
         let mut tasks = unsafe {
             let mut tasks: [MaybeUninit<_>; CONCURRENCY] = MaybeUninit::uninit().assume_init();
@@ -345,7 +360,7 @@ pub async fn run_slice<T, F: Fn(&mut T)>(slice: &mut [T], f: F) {
             }
             tasks.map(|a| a.assume_init())
         };
-        pin_array!(tasks, CONCURRENCY);
+        pin_array_mut!(tasks, CONCURRENCY);
 
         let mut join_handles = unsafe {
             let mut join_handles: [MaybeUninit<_>; CONCURRENCY] =
@@ -355,10 +370,10 @@ pub async fn run_slice<T, F: Fn(&mut T)>(slice: &mut [T], f: F) {
             }
             join_handles.map(|a| a.assume_init())
         };
-        pin_array!(join_handles, CONCURRENCY);
+        pin_array_mut!(join_handles, CONCURRENCY);
 
         for (i, task) in tasks.into_iter().enumerate() {
-            task.run(&join_handles[i]);
+            task.run(&join_handles[i].as_ref());
         }
 
         for join_handle in join_handles {

@@ -1,4 +1,9 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    ptr,
+    sync::Arc,
+    thread::{self, ThreadId},
+};
 
 use nalgebra_glm::{ortho_rh_zo, Mat4};
 use vulkan::{mesh::Mesh, InstanceData, VertexBuffer, Vulkan};
@@ -6,22 +11,44 @@ use winit::window::Window;
 
 type StaticMeshId = u8;
 
-pub struct GfxDelegate<'a> {
-    graphics: &'a Graphics,
-}
+pub struct GfxDelegate(*const Graphics);
 
-impl<'a> GfxDelegate<'a> {
+impl GfxDelegate {
     pub fn update_static_mesh(&self, static_mesh: &StaticMesh, model_matrix: Mat4) {
-        self.graphics
-            .vulkan
-            .update_instance(static_mesh.instance_index, &InstanceData { model_matrix });
+        unsafe {
+            self.0
+                .as_ref()
+                .unwrap()
+                .vulkan
+                .update_instance(static_mesh.instance_index, &InstanceData { model_matrix });
+        }
     }
 
     pub fn draw_instance(&self, static_mesh: &StaticMesh) {
-        self.graphics
-            .vulkan
-            .draw_instance(static_mesh.instance_index, &static_mesh.vertex_buffer);
+        unsafe {
+            self.0
+                .as_ref()
+                .unwrap()
+                .vulkan
+                .draw_instance(static_mesh.instance_index, &static_mesh.vertex_buffer);
+        }
     }
+}
+
+static mut GFX_DELEGATES: Vec<(ThreadId, GfxDelegate)> = Vec::new();
+
+pub fn gfx_delegate<'a>() -> &'a GfxDelegate {
+    let thread_id = thread::current().id();
+
+    unsafe {
+        for gfx_delegate in &GFX_DELEGATES {
+            if gfx_delegate.0 == thread_id {
+                return &gfx_delegate.1;
+            }
+        }
+    }
+
+    unreachable!("push_event() called from invalid thread")
 }
 
 #[derive(Clone)]
@@ -38,7 +65,14 @@ pub struct Graphics {
 }
 
 impl Graphics {
-    pub fn new(window: Window) -> Self {
+    pub fn new(window: Window, thread_ids: &[ThreadId]) -> Self {
+        unsafe {
+            GFX_DELEGATES.clear();
+            for thread_id in thread_ids {
+                GFX_DELEGATES.push((*thread_id, GfxDelegate(ptr::null())));
+            }
+        }
+
         Self {
             vulkan: Vulkan::new(window),
             static_meshes: Vec::new(),
@@ -49,6 +83,12 @@ impl Graphics {
     pub async fn frame_begin(&mut self) {
         self.vulkan.begin_instance_update();
 
+        unsafe {
+            for gfx_delegate in &mut GFX_DELEGATES {
+                gfx_delegate.1 .0 = &*self;
+            }
+        }
+
         let proj_matrix = ortho_rh_zo(-2.0, 2.0, 2.0, -2.0, -2.0, 2.0);
         let view_matrix = Mat4::identity();
 
@@ -58,12 +98,14 @@ impl Graphics {
         });
     }
 
-    pub fn gfx_delegate(&mut self) -> GfxDelegate {
-        GfxDelegate { graphics: self }
-    }
-
     pub async fn frame_end(&mut self) {
         self.vulkan.end_instance_update_and_render();
+
+        unsafe {
+            for gfx_delegate in &mut GFX_DELEGATES {
+                gfx_delegate.1 .0 = ptr::null();
+            }
+        }
     }
 
     pub fn create_static_mesh(&mut self, mesh_name: &str) -> StaticMesh {

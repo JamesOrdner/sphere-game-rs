@@ -17,7 +17,7 @@ pub struct Server {
 impl Server {
     pub fn new() -> Self {
         let (task_executor, thread_ids) = Executor::new();
-        let event_manager = EventManager::new(thread_ids);
+        let event_manager = EventManager::new(&thread_ids);
 
         Self {
             event_manager,

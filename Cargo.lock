@@ -475,6 +475,7 @@ dependencies = [
  "event",
  "gfx",
  "nalgebra-glm",
+ "task",
 ]
 
 [[package]]

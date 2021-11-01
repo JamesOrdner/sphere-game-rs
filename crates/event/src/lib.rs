@@ -47,11 +47,11 @@ pub fn push_event(entity_id: EntityId, component: Component) {
 pub struct EventManager;
 
 impl EventManager {
-    pub fn new(thread_ids: Vec<ThreadId>) -> Self {
+    pub fn new(thread_ids: &[ThreadId]) -> Self {
         unsafe {
             EVENT_SENDERS.clear();
             for thread_id in thread_ids {
-                EVENT_SENDERS.push((thread_id, EventSender::new()));
+                EVENT_SENDERS.push((*thread_id, EventSender::new()));
             }
         }
 

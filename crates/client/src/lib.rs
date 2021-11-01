@@ -28,14 +28,14 @@ impl Client {
         let window = Window::new(event_loop).unwrap();
 
         let (task_executor, thread_ids) = Executor::new();
-        let event_manager = EventManager::new(thread_ids);
+        let event_manager = EventManager::new(&thread_ids);
 
         Self {
             event_manager,
             task_executor,
             last_update: std::time::Instant::now(),
             entities: Vec::new(),
-            graphics: Graphics::new(window),
+            graphics: Graphics::new(window, &thread_ids),
             systems: Systems::new(),
         }
     }
@@ -93,13 +93,9 @@ impl Client {
             let mut graphics = async {
                 self.graphics.frame_begin().await;
 
-                {
-                    let gfx_delegate = self.graphics.gfx_delegate();
+                let mut static_mesh = self.systems.gfx_static_mesh.render();
 
-                    let mut static_mesh = self.systems.gfx_static_mesh.render(&gfx_delegate);
-
-                    run_parallel([&mut static_mesh]).await;
-                }
+                run_parallel([&mut static_mesh]).await;
 
                 self.graphics.frame_end().await;
             };
