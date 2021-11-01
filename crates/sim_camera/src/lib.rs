@@ -1,55 +1,66 @@
 use component::Component;
-use data::ComponentArray;
 use entity::EntityId;
 use event::{push_event, EventListener};
-use nalgebra_glm::{vec2_to_vec3, vec3, Vec2, Vec3};
-
-struct CameraComponent {
-    location: Vec3,
-    velocity: Vec3,
-    acceleration: Vec2,
-}
+use nalgebra_glm::{vec3, Vec3};
 
 pub struct System {
-    data: ComponentArray<CameraComponent>,
+    entity_id: Option<EntityId>,
+    location: Vec3,
+    target: Option<Target>,
+}
+
+struct Target {
+    entity_id: EntityId,
+    location: Vec3,
 }
 
 impl System {
     pub fn new() -> Self {
         Self {
-            data: ComponentArray::new(),
+            entity_id: None,
+            location: Vec3::zeros(),
+            target: None,
         }
     }
 
     pub fn create_component(&mut self, entity_id: EntityId) {
-        self.data.push(
-            entity_id,
-            CameraComponent {
-                location: vec3(0.0, 0.0, 5.0),
-                velocity: Vec3::zeros(),
-                acceleration: Vec2::zeros(),
-            },
-        );
+        debug_assert!(self.entity_id.is_none());
+        self.entity_id = Some(entity_id);
+        self.location = vec3(0.0, 0.0, 5.0);
     }
 
     pub fn destroy_component(&mut self, entity_id: EntityId) {
-        self.data.remove(entity_id);
+        debug_assert!(*self.entity_id.as_ref().unwrap() == entity_id);
+        self.entity_id = None;
+    }
+
+    pub fn set_target(&mut self, target_entity_id: EntityId) {
+        self.target = Some(Target {
+            entity_id: target_entity_id,
+            location: Vec3::zeros(),
+        })
     }
 
     pub async fn simulate(&mut self, delta_time: f32) {
-        for component in &mut self.data {
-            component.data.velocity += vec2_to_vec3(&component.data.acceleration) * delta_time;
-            component.data.velocity *= 1.0 - delta_time;
-            component.data.location += component.data.velocity * delta_time;
+        if let (Some(entity_id), Some(target)) = (self.entity_id, self.target.as_ref()) {
+            self.location = target.location;
 
-            push_event(
-                component.entity_id,
-                Component::Location(component.data.location),
-            );
+            push_event(entity_id, Component::Location(self.location));
         }
     }
 }
 
 impl EventListener for System {
-    fn receive_event(&mut self, _: EntityId, _: &Component) {}
+    fn receive_event(&mut self, entity_id: EntityId, component: &Component) {
+        let target = match self.target.as_mut() {
+            Some(target) => target,
+            None => return,
+        };
+
+        if target.entity_id == entity_id {
+            if let Component::Location(location) = component {
+                target.location = *location;
+            }
+        }
+    }
 }

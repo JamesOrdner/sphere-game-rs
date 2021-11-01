@@ -93,9 +93,10 @@ impl Client {
             let mut graphics = async {
                 self.graphics.frame_begin().await;
 
+                let mut camera = self.systems.gfx_camera.render();
                 let mut static_mesh = self.systems.gfx_static_mesh.render();
 
-                run_parallel([&mut static_mesh]).await;
+                run_parallel([&mut camera, &mut static_mesh]).await;
 
                 self.graphics.frame_end().await;
             };
@@ -113,6 +114,8 @@ impl Client {
         self.entities
             .push(entity::static_mesh(10, &mut self.systems, static_mesh));
         self.entities.push(entity::camera(20, &mut self.systems));
+
+        self.systems.sim_camera.set_target(10);
     }
 
     fn shutdown(&mut self) {
@@ -126,6 +129,7 @@ pub struct Systems {
     pub input: input::System,
     pub sim_camera: sim_camera::System,
     pub sim_physics: sim_physics::System,
+    pub gfx_camera: gfx_camera::System,
     pub gfx_static_mesh: gfx_static_mesh::System,
 }
 
@@ -135,6 +139,7 @@ impl Systems {
             input: input::System::new(),
             sim_camera: sim_camera::System::new(),
             sim_physics: sim_physics::System::new(),
+            gfx_camera: gfx_camera::System::new(),
             gfx_static_mesh: gfx_static_mesh::System::new(),
         }
     }
@@ -144,6 +149,7 @@ impl EventListener for Systems {
     fn receive_event(&mut self, entity_id: EntityId, component: &Component) {
         self.sim_camera.receive_event(entity_id, component);
         self.sim_physics.receive_event(entity_id, component);
+        self.gfx_camera.receive_event(entity_id, component);
         self.gfx_static_mesh.receive_event(entity_id, component);
     }
 }

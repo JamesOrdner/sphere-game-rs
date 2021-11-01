@@ -11,6 +11,7 @@ component = { path = "../component" }
 entity = { path = "../entity" }
 event = { path = "../event" }
 gfx = { path = "../gfx" }
+gfx_camera = { path = "../gfx_camera" }
 gfx_static_mesh = { path = "../gfx_static_mesh" }
 sim_camera = { path = "../sim_camera" }
 sim_physics = { path = "../sim_physics" }

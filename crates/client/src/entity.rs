@@ -16,13 +16,13 @@ impl Entity {
 
 pub fn camera(entity_id: EntityId, systems: &mut Systems) -> Entity {
     systems.sim_camera.create_component(entity_id);
-    // systems.gfx_camera.create_component(entity_id);
+    systems.gfx_camera.create_component(entity_id);
 
     Entity {
         entity_id,
         destructor: |entity_id, systems| {
             systems.sim_camera.destroy_component(entity_id);
-            // systems.gfx_camera.destroy_component(entity_id);
+            systems.gfx_camera.destroy_component(entity_id);
         },
     }
 }

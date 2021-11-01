@@ -128,6 +128,7 @@ dependencies = [
  "entity",
  "event",
  "gfx",
+ "gfx_camera",
  "gfx_static_mesh",
  "nalgebra-glm",
  "sim_camera",
@@ -463,6 +464,17 @@ dependencies = [
  "nalgebra-glm",
  "vulkan",
  "winit",
+]
+
+[[package]]
+name = "gfx_camera"
+version = "0.1.0"
+dependencies = [
+ "component",
+ "entity",
+ "event",
+ "gfx",
+ "nalgebra-glm",
 ]
 
 [[package]]
@@ -1126,7 +1138,6 @@ name = "sim_camera"
 version = "0.0.0"
 dependencies = [
  "component",
- "data",
  "entity",
  "event",
  "nalgebra-glm",

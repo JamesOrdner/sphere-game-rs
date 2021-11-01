@@ -5,7 +5,7 @@ use std::{
     thread::{self, ThreadId},
 };
 
-use nalgebra_glm::{ortho_rh_zo, Mat4};
+use nalgebra_glm::Mat4;
 use vulkan::{mesh::Mesh, InstanceData, VertexBuffer, Vulkan};
 use winit::window::Window;
 
@@ -14,6 +14,19 @@ type StaticMeshId = u8;
 pub struct GfxDelegate(*const Graphics);
 
 impl GfxDelegate {
+    pub fn update_scene(&self, view_matrix: Mat4, proj_matrix: Mat4) {
+        unsafe {
+            self.0
+                .as_ref()
+                .unwrap()
+                .vulkan
+                .update_scene(&vulkan::SceneData {
+                    proj_matrix,
+                    view_matrix,
+                });
+        }
+    }
+
     pub fn update_static_mesh(&self, static_mesh: &StaticMesh, model_matrix: Mat4) {
         unsafe {
             self.0
@@ -88,14 +101,6 @@ impl Graphics {
                 gfx_delegate.1 .0 = &*self;
             }
         }
-
-        let proj_matrix = ortho_rh_zo(-2.0, 2.0, 2.0, -2.0, -2.0, 2.0);
-        let view_matrix = Mat4::identity();
-
-        self.vulkan.update_scene(&vulkan::SceneData {
-            proj_matrix,
-            view_matrix,
-        });
     }
 
     pub async fn frame_end(&mut self) {
