@@ -93,10 +93,9 @@ impl Client {
             let mut graphics = async {
                 self.graphics.frame_begin().await;
 
-                let mut camera = self.systems.gfx_camera.render();
-                let mut static_mesh = self.systems.gfx_static_mesh.render();
-
-                run_parallel([&mut camera, &mut static_mesh]).await;
+                // run sequentially until we get secondary command buffers up and running
+                self.systems.gfx_camera.render().await;
+                self.systems.gfx_static_mesh.render().await;
 
                 self.graphics.frame_end().await;
             };
