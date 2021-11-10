@@ -58,11 +58,14 @@ impl EventManager {
         Self {}
     }
 
-    pub fn distribute(&mut self, listener: &mut dyn EventListener) {
+    pub fn distribute<F>(&mut self, mut event_handler: F)
+    where
+        F: FnMut(EntityId, &Component),
+    {
         unsafe {
             for event_sender in &mut EVENT_SENDERS {
                 for event in &mut event_sender.1.event_queue {
-                    listener.receive_event(event.entity_id, &event.component);
+                    event_handler(event.entity_id, &event.component);
                 }
                 event_sender.1.event_queue.clear();
             }

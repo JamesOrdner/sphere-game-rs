@@ -1,5 +1,8 @@
+use std::num::Wrapping;
+
 use component::Component;
 use event::{EventListener, EventManager};
+use system::{Timestamp, TIMESTEP};
 use task::{run_parallel, Executor};
 
 use crate::entity::Entity;
@@ -10,6 +13,7 @@ pub struct Server {
     event_manager: EventManager,
     task_executor: Executor,
     last_update: std::time::Instant,
+    timestamp: Timestamp,
     entities: Vec<Entity>,
     systems: Systems,
 }
@@ -23,6 +27,7 @@ impl Server {
             event_manager,
             task_executor,
             last_update: std::time::Instant::now(),
+            timestamp: Wrapping(0),
             entities: Vec::new(),
             systems: Systems::new(),
         }
@@ -42,17 +47,21 @@ impl Server {
     }
 
     fn simulate(&mut self) {
-        const UPDATE_INTERVAL: std::time::Duration = std::time::Duration::from_micros(16_666);
-        let delta_time = UPDATE_INTERVAL.as_secs_f32();
-
         let time_now = std::time::Instant::now();
-        while time_now.duration_since(self.last_update) > UPDATE_INTERVAL {
-            self.last_update += UPDATE_INTERVAL;
+        while time_now.duration_since(self.last_update) > TIMESTEP {
+            self.last_update += TIMESTEP;
 
             let mut frame_task = async {
-                let mut physics = self.systems.sim_physics.simulate(delta_time);
+                self.systems
+                    .sim_network_server
+                    .simulate(self.timestamp)
+                    .await;
+
+                let mut physics = self.systems.sim_physics.simulate(self.timestamp);
 
                 run_parallel([&mut physics]).await;
+
+                self.timestamp += Wrapping(1);
             };
 
             self.task_executor.execute_blocking(&mut frame_task);
@@ -60,7 +69,9 @@ impl Server {
     }
 
     fn distribute_events(&mut self) {
-        self.event_manager.distribute(&mut self.systems);
+        self.event_manager.distribute(|entity_id, component| {
+            self.systems.receive_event(entity_id, component);
+        });
     }
 
     fn load_level(&mut self) {
@@ -76,12 +87,14 @@ impl Server {
 }
 
 pub struct Systems {
+    pub sim_network_server: sim_network_server::System,
     sim_physics: sim_physics::System,
 }
 
 impl Systems {
     pub fn new() -> Self {
         Self {
+            sim_network_server: sim_network_server::System::new(),
             sim_physics: sim_physics::System::new(),
         }
     }
@@ -89,6 +102,7 @@ impl Systems {
 
 impl EventListener for Systems {
     fn receive_event(&mut self, entity_id: ::entity::EntityId, component: &Component) {
+        self.sim_network_server.receive_event(entity_id, component);
         self.sim_physics.receive_event(entity_id, component);
     }
 }

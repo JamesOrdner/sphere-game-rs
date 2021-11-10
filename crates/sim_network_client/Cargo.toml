@@ -1,13 +1,15 @@
 [package]
-name = "server"
+name = "sim_network_client"
 version = "0.0.0"
 edition = "2021"
 
 [dependencies]
+laminar = "0.5"
+nalgebra-glm = "0.15"
+
 component = { path = "../component" }
 entity = { path = "../entity" }
 event = { path = "../event" }
-sim_network_server = { path = "../sim_network_server" }
-sim_physics = { path = "../sim_physics" }
+network_utils = { path = "../network_utils" }
 system = { path = "../system" }
 task = { path = "../task" }

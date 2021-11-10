@@ -13,6 +13,9 @@ event = { path = "../event" }
 gfx = { path = "../gfx" }
 gfx_camera = { path = "../gfx_camera" }
 gfx_static_mesh = { path = "../gfx_static_mesh" }
+server = { path = "../server" }
 sim_camera = { path = "../sim_camera" }
+sim_network_client = { path = "../sim_network_client" }
 sim_physics = { path = "../sim_physics" }
+system = { path = "../system" }
 task = { path = "../task" }

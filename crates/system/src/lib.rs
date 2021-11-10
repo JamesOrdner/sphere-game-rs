@@ -1,17 +1,7 @@
-pub type SystemId = u8;
+use std::num::Wrapping;
 
-pub struct SystemIdCounter {
-    current: SystemId,
-}
+pub const TIMESTEP: std::time::Duration = std::time::Duration::from_micros(16_667);
 
-impl SystemIdCounter {
-    pub fn new() -> Self {
-        Self { current: 0 }
-    }
+pub const TIMESTEP_F32: f32 = 1.0 / 60.0;
 
-    pub fn next(&mut self) -> SystemId {
-        let ret = self.current;
-        self.current += 1;
-        ret
-    }
-}
+pub type Timestamp = Wrapping<u32>;

@@ -10,4 +10,5 @@ component = { path = "../component" }
 data = { path = "../data" }
 entity = { path = "../entity" }
 event = { path = "../event" }
+system = { path = "../system" }
 task = { path = "../task" }

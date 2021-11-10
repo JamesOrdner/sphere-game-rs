@@ -193,7 +193,7 @@ impl Executor {
         (executor, thread_ids.into_inner().unwrap())
     }
 
-    pub fn execute_blocking(&self, future: &mut dyn Future<Output = ()>) {
+    pub fn execute_blocking(&self, future: &mut (dyn Future<Output = ()> + Send)) {
         // guaranteed not to move in the scope of this function
         let future = unsafe { Pin::new_unchecked(future) };
 

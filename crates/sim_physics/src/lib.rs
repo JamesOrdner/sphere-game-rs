@@ -3,6 +3,7 @@ use data::ComponentArray;
 use entity::EntityId;
 use event::{push_event, EventListener};
 use nalgebra_glm::{vec2_to_vec3, Vec3};
+use system::{Timestamp, TIMESTEP_F32};
 use task::run_slice;
 
 struct ComponentData {
@@ -35,9 +36,9 @@ impl System {
         self.data.remove(entity_id);
     }
 
-    pub async fn simulate(&mut self, delta_time: f32) {
+    pub async fn simulate(&mut self, timestamp: Timestamp) {
         run_slice(self.data.as_mut_slice(), |component| {
-            component.data.location += component.data.velocity * delta_time;
+            component.data.location += component.data.velocity * TIMESTEP_F32;
 
             push_event(
                 component.entity_id,
@@ -49,12 +50,19 @@ impl System {
 }
 
 impl EventListener for System {
-    fn receive_event(&mut self, _: EntityId, component: &Component) {
+    fn receive_event(&mut self, entity_id: EntityId, component: &Component) {
+        if entity_id > 0 && !self.data.contains_entity(entity_id) {
+            return;
+        }
+
         match component {
             Component::InputAcceleration(acceleration) => {
                 for component in &mut self.data {
                     component.data.velocity = vec2_to_vec3(acceleration);
                 }
+            }
+            Component::Location(location) => {
+                self.data[entity_id].data.location = *location;
             }
             _ => {}
         }

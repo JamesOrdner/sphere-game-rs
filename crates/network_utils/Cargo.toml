@@ -1,0 +1,11 @@
+[package]
+name = "network_utils"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+bincode = "1.3.3"
+nalgebra-glm = { version = "0.15.0", features = ["serde-serialize"] }
+serde = "1.0.130"
+
+system = { path = "../system" }

@@ -32,6 +32,9 @@ pub fn static_mesh(
     systems: &mut Systems,
     static_mesh_id: StaticMesh,
 ) -> Entity {
+    systems
+        .sim_network_client
+        .create_static_mesh_component(entity_id);
     systems.sim_physics.create_component(entity_id);
     systems
         .gfx_static_mesh
@@ -40,6 +43,9 @@ pub fn static_mesh(
     Entity {
         entity_id,
         destructor: |entity_id, systems| {
+            systems
+                .sim_network_client
+                .destroy_static_mesh_component(entity_id);
             systems.sim_physics.destroy_component(entity_id);
             systems.gfx_static_mesh.destroy_component(entity_id);
         },
