@@ -1308,6 +1308,7 @@ dependencies = [
  "entity",
  "event",
  "nalgebra-glm",
+ "network_utils",
  "system",
  "task",
 ]

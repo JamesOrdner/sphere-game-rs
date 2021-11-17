@@ -5,7 +5,9 @@ use entity::EntityId;
 use event::{push_event, EventListener};
 use laminar::{Packet, Socket, SocketEvent};
 use nalgebra_glm::{Vec2, Vec3};
-use network_utils::{InputPacket, NetworkId, PacketType, ServerConnectPacket, StaticMeshPacket};
+use network_utils::{
+    InputPacket, NetworkId, PacketType, ServerConnectPacket, StaticMeshPacket, VelocityPacket,
+};
 use system::Timestamp;
 
 const SERVER: &str = "127.0.0.1:12351";
@@ -75,6 +77,7 @@ impl System {
             PacketType::Input => {}
             PacketType::ServerConnect => self.handle_server_connect(packet),
             PacketType::StaticMesh => self.handle_static_mesh_packet(packet),
+            PacketType::Velocity => self.handle_velocity_packet(packet),
         };
     }
 
@@ -92,7 +95,37 @@ impl System {
             .unwrap();
         static_mesh.location = packet.location;
 
-        push_event(static_mesh.entity_id, Component::Location(packet.location));
+        push_event(
+            static_mesh.entity_id,
+            Component::NetStaticMeshLocation {
+                timestamp: packet.timestamp,
+                location: packet.location,
+            },
+        );
+
+        push_event(
+            static_mesh.entity_id,
+            Component::NetStaticMeshVelocity {
+                timestamp: packet.timestamp,
+                velocity: packet.velocity,
+            },
+        );
+    }
+
+    fn handle_velocity_packet(&mut self, packet: &[u8]) {
+        let packet = VelocityPacket::from(packet);
+        let static_mesh = self
+            .static_mesh_components
+            .get_mut(&packet.network_id)
+            .unwrap();
+
+        push_event(
+            static_mesh.entity_id,
+            Component::NetStaticMeshVelocity {
+                timestamp: packet.timestamp,
+                velocity: packet.velocity,
+            },
+        );
     }
 }
 
