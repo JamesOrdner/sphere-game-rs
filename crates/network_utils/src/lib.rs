@@ -23,15 +23,13 @@ impl From<&[u8]> for PacketType {
 #[derive(Serialize, Deserialize)]
 pub struct InputPacket {
     packet_type: PacketType,
-    pub timestamp: Timestamp,
     pub input: Vec2,
 }
 
 impl InputPacket {
-    pub fn new(timestamp: Timestamp, input: Vec2) -> Self {
+    pub fn new(input: Vec2) -> Self {
         Self {
             packet_type: PacketType::Input,
-            timestamp,
             input,
         }
     }

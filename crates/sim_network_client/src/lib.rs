@@ -49,8 +49,8 @@ impl System {
             .retain(|_, static_mesh| static_mesh.entity_id != entity_id);
     }
 
-    pub async fn simulate(&mut self, timestamp: Timestamp) {
-        let input = InputPacket::new(timestamp, self.input);
+    pub async fn simulate(&mut self, _timestamp: Timestamp) {
+        let input = InputPacket::new(self.input);
 
         self.socket
             .send(Packet::reliable_sequenced(
