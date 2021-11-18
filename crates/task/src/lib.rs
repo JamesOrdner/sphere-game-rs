@@ -4,8 +4,9 @@ use std::{
     pin::Pin,
     ptr,
     sync::{
+        atomic::{AtomicPtr, Ordering},
         mpsc::{sync_channel, Receiver, SyncSender},
-        Mutex,
+        Arc, Condvar, Mutex,
     },
     task::{Context, Poll, RawWaker, RawWakerVTable, Waker},
     thread::{self, JoinHandle, ThreadId},
@@ -67,7 +68,7 @@ impl Task {
             .expect("executor channel full");
     }
 
-    fn poll_future(&mut self) {
+    fn poll_future(&mut self) -> bool {
         let waker = RawWaker::new(self as *mut Task as *mut (), &VTABLE);
         let waker = unsafe { Waker::from_raw(waker) };
 
@@ -82,8 +83,10 @@ impl Task {
                 if let Some(waker) = join_handle.waker.take() {
                     waker.wake();
                 }
+
+                true
             }
-            Poll::Pending => {}
+            Poll::Pending => false,
         }
     }
 }
@@ -148,6 +151,9 @@ impl Future for TaskJoinHandle {
 
 pub struct Executor {
     thread_join_handles: Vec<JoinHandle<()>>,
+    main_task: Arc<AtomicPtr<Task>>,
+    task_cvar: Arc<Condvar>,
+    task_cvar_mutex: Arc<Mutex<bool>>,
 }
 
 enum ExecutorMessage {
@@ -159,6 +165,11 @@ impl Executor {
     pub fn new() -> (Self, Vec<ThreadId>) {
         const CPU_COUNT: usize = 4;
 
+        let main_task = Arc::new(AtomicPtr::new(ptr::null_mut()));
+
+        let task_cvar = Arc::new(Condvar::new());
+        let task_cvar_mutex = Arc::new(Mutex::new(false));
+
         let mut thread_join_handles = Vec::with_capacity(CPU_COUNT);
 
         let thread_ids = Mutex::new(Vec::new());
@@ -167,14 +178,23 @@ impl Executor {
             unsafe { std::mem::transmute::<_, &'static Mutex<Vec<ThreadId>>>(&thread_ids) };
 
         for _ in 0..CPU_COUNT {
-            thread_join_handles.push(thread::spawn(|| {
+            let main_task = main_task.clone();
+            let task_cvar = task_cvar.clone();
+            let task_cvar_mutex = task_cvar_mutex.clone();
+            thread_join_handles.push(thread::spawn(move || {
                 thread_ids_ref.lock().unwrap().push(thread::current().id());
                 loop {
                     match SYNC_CHANNEL.receiver.lock().unwrap().recv().unwrap() {
                         ExecutorMessage::Task(task_ptr) => {
                             // SAFETY: we only ever create a Task reference here
                             let task = unsafe { task_ptr.inner.as_mut().unwrap() };
-                            task.poll_future();
+                            if task.poll_future()
+                                && task_ptr.inner == main_task.load(Ordering::Acquire)
+                            {
+                                let mut task_guard = task_cvar_mutex.lock().unwrap();
+                                *task_guard = true;
+                                task_cvar.notify_one();
+                            }
                         }
                         ExecutorMessage::Join => break,
                     }
@@ -188,26 +208,34 @@ impl Executor {
 
         let executor = Self {
             thread_join_handles,
+            main_task,
+            task_cvar,
+            task_cvar_mutex,
         };
 
         (executor, thread_ids.into_inner().unwrap())
     }
 
-    pub fn execute_blocking(&self, future: &mut (dyn Future<Output = ()> + Send)) {
+    pub fn execute_blocking(&mut self, future: &mut (dyn Future<Output = ()> + Send)) {
         // guaranteed not to move in the scope of this function
         let future = unsafe { Pin::new_unchecked(future) };
 
         let mut task = Task::new(future);
-        let task = unsafe { Pin::new_unchecked(&mut task) };
+        let mut task = unsafe { Pin::new_unchecked(&mut task) };
 
         let join_handle = TaskJoinHandle::new();
         let join_handle = unsafe { Pin::new_unchecked(&join_handle) };
 
+        self.main_task.store(&mut *task, Ordering::Release);
+
         task.run(&join_handle);
 
-        while !join_handle.inner.lock().done {
-            std::thread::sleep(std::time::Duration::from_millis(1));
-        }
+        let mut task_guard = self
+            .task_cvar
+            .wait_while(self.task_cvar_mutex.lock().unwrap(), |done| !*done)
+            .unwrap();
+
+        *task_guard = false;
     }
 }
 
