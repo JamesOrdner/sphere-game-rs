@@ -38,7 +38,7 @@ impl System {
 impl EventListener for System {
     fn receive_event(&mut self, entity_id: EntityId, component: &Component) {
         if self.entity_id.as_ref() == Some(&entity_id) {
-            if let Component::Location(location) = component {
+            if let Component::RenderLocation(location) = component {
                 self.location = *location;
             }
         }

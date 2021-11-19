@@ -41,11 +41,11 @@ impl System {
         })
     }
 
-    pub async fn simulate(&mut self, delta_time: f32) {
+    pub async fn render(&mut self, delta_time: f32) {
         if let (Some(entity_id), Some(target)) = (self.entity_id, self.target.as_ref()) {
             self.location = target.location;
 
-            push_event(entity_id, Component::Location(self.location));
+            push_event(entity_id, Component::RenderLocation(self.location));
         }
     }
 }
@@ -58,7 +58,7 @@ impl EventListener for System {
         };
 
         if target.entity_id == entity_id {
-            if let Component::Location(location) = component {
+            if let Component::RenderLocation(location) = component {
                 target.location = *location;
             }
         }

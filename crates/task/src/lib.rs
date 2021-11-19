@@ -338,7 +338,7 @@ pub async fn run_parallel<const N: usize>(futures: [&mut (dyn Future<Output = ()
     }
 }
 
-struct PtrWrapper<T: Send>(*mut T);
+struct PtrWrapper<T: Send>(*const T);
 
 unsafe impl<T: Send> Send for PtrWrapper<T> {}
 
@@ -350,15 +350,87 @@ impl<T: Send> Clone for PtrWrapper<T> {
     }
 }
 
-pub async fn run_slice<T: Send, F: Fn(&mut T) + Sync>(slice: &mut [T], f: F) {
+struct MutPtrWrapper<T: Send>(*mut T);
+
+unsafe impl<T: Send> Send for MutPtrWrapper<T> {}
+
+impl<T: Send> Copy for MutPtrWrapper<T> {}
+
+impl<T: Send> Clone for MutPtrWrapper<T> {
+    fn clone(&self) -> Self {
+        Self(self.0)
+    }
+}
+
+pub async fn run_slice<T: Send, F: Fn(&T) + Sync>(slice: &[T], f: F) {
     const CONCURRENCY: usize = 8;
     const STRIDE: usize = 8;
 
     let f = &f;
-    let slice_ptr = PtrWrapper(slice.as_mut_ptr());
+    let slice_ptr = PtrWrapper(slice.as_ptr());
     let slice_len = slice.len();
 
     let f_async = |offset: usize, slice_ptr: PtrWrapper<T>| {
+        if offset < slice_len {
+            let len = usize::min(STRIDE, slice_len - offset);
+            for i in 0..len {
+                f(unsafe { &*slice_ptr.0.add(offset + i) });
+            }
+        }
+    };
+
+    let mut offset = 0;
+    while offset < slice_len {
+        let mut futures = unsafe {
+            let mut futures: [MaybeUninit<_>; CONCURRENCY] = MaybeUninit::uninit().assume_init();
+            for future in futures.iter_mut() {
+                future.write(async move {
+                    f_async(offset, slice_ptr);
+                });
+                offset += STRIDE;
+            }
+            futures.map(|a| a.assume_init())
+        };
+        pin_array_mut!(futures, CONCURRENCY);
+
+        let mut tasks = unsafe {
+            let mut tasks: [MaybeUninit<_>; CONCURRENCY] = MaybeUninit::uninit().assume_init();
+            for (i, future) in futures.into_iter().enumerate() {
+                tasks[i].write(Task::new(future));
+            }
+            tasks.map(|a| a.assume_init())
+        };
+        pin_array_mut!(tasks, CONCURRENCY);
+
+        let mut join_handles = unsafe {
+            let mut join_handles: [MaybeUninit<_>; CONCURRENCY] =
+                MaybeUninit::uninit().assume_init();
+            for i in 0..CONCURRENCY {
+                join_handles[i].write(TaskJoinHandle::new());
+            }
+            join_handles.map(|a| a.assume_init())
+        };
+        pin_array_mut!(join_handles, CONCURRENCY);
+
+        for (i, task) in tasks.into_iter().enumerate() {
+            task.run(&join_handles[i].as_ref());
+        }
+
+        for join_handle in join_handles {
+            join_handle.await;
+        }
+    }
+}
+
+pub async fn run_slice_mut<T: Send, F: Fn(&mut T) + Sync>(slice: &mut [T], f: F) {
+    const CONCURRENCY: usize = 8;
+    const STRIDE: usize = 8;
+
+    let f = &f;
+    let slice_ptr = MutPtrWrapper(slice.as_mut_ptr());
+    let slice_len = slice.len();
+
+    let f_async = |offset: usize, slice_ptr: MutPtrWrapper<T>| {
         if offset < slice_len {
             let len = usize::min(STRIDE, slice_len - offset);
             for i in 0..len {

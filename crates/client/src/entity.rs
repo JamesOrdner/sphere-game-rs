@@ -15,14 +15,14 @@ impl Entity {
 }
 
 pub fn camera(entity_id: EntityId, systems: &mut Systems) -> Entity {
-    systems.sim_camera.create_component(entity_id);
-    systems.gfx_camera.create_component(entity_id);
+    systems.simulation.camera.create_component(entity_id);
+    systems.graphics.camera.create_component(entity_id);
 
     Entity {
         entity_id,
         destructor: |entity_id, systems| {
-            systems.sim_camera.destroy_component(entity_id);
-            systems.gfx_camera.destroy_component(entity_id);
+            systems.simulation.camera.destroy_component(entity_id);
+            systems.graphics.camera.destroy_component(entity_id);
         },
     }
 }
@@ -33,21 +33,24 @@ pub fn static_mesh(
     static_mesh_id: StaticMesh,
 ) -> Entity {
     systems
-        .sim_network_client
+        .simulation
+        .network_client
         .create_static_mesh_component(entity_id);
-    systems.sim_physics.create_component(entity_id);
+    systems.simulation.physics.create_component(entity_id);
     systems
-        .gfx_static_mesh
+        .graphics
+        .static_mesh
         .create_component(entity_id, static_mesh_id);
 
     Entity {
         entity_id,
         destructor: |entity_id, systems| {
             systems
-                .sim_network_client
+                .simulation
+                .network_client
                 .destroy_static_mesh_component(entity_id);
-            systems.sim_physics.destroy_component(entity_id);
-            systems.gfx_static_mesh.destroy_component(entity_id);
+            systems.simulation.physics.destroy_component(entity_id);
+            systems.graphics.static_mesh.destroy_component(entity_id);
         },
     }
 }

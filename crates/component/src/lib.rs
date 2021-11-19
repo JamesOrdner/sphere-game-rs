@@ -12,6 +12,7 @@ pub enum Component {
         timestamp: Timestamp,
         velocity: Vec3,
     },
+    RenderLocation(Vec3),
     Timestamp(Timestamp),
     Velocity(Vec3),
 }

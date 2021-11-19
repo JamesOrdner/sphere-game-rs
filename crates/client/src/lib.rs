@@ -4,7 +4,7 @@ use ::entity::EntityId;
 use component::Component;
 use event::{EventListener, EventManager};
 use gfx::Graphics;
-use system::{Timestamp, TIMESTEP};
+use system::{Timestamp, TIMESTEP, TIMESTEP_F32};
 use task::{run_parallel, Executor};
 use winit::{
     event::{Event, WindowEvent},
@@ -95,41 +95,44 @@ impl Client {
         self.distribute_events();
 
         let now = std::time::Instant::now();
-        let frame_delta_time = now.duration_since(self.last_frame_instant).as_secs_f32();
+        let delta_time = now.duration_since(self.last_frame_instant).as_secs_f32();
         self.last_frame_instant = now;
 
-        let mut frame_task = async {
-            let mut simulation = async {
-                while now.duration_since(self.last_sim_instant) > TIMESTEP {
-                    self.last_sim_instant += TIMESTEP;
+        // simulate
 
-                    let mut camera = self.systems.sim_camera.simulate(frame_delta_time);
-                    let mut network_client =
-                        self.systems.sim_network_client.simulate(self.timestamp);
-                    let mut physics = self.systems.sim_physics.simulate(self.timestamp);
+        while now.duration_since(self.last_sim_instant) > TIMESTEP {
+            self.last_sim_instant += TIMESTEP;
 
-                    run_parallel([&mut camera, &mut network_client, &mut physics]).await;
+            {
+                let mut simulate = self.systems.simulation.simulate(self.timestamp);
+                self.task_executor.execute_blocking(&mut simulate);
+            }
 
-                    self.timestamp += Wrapping(1);
-                }
-            };
+            self.distribute_events();
+
+            self.timestamp += Wrapping(1);
+        }
+
+        // todo: we cannot parallelize simulation and rendering because of event distribution
+
+        // render
+
+        let mut render = async {
+            let rem = TIMESTEP - now.duration_since(self.last_sim_instant);
+            let frame_interp = 1.0 - rem.as_secs_f32() / TIMESTEP_F32;
+
+            let mut simulation = self.systems.simulation.render(delta_time, frame_interp);
 
             let mut graphics = async {
                 self.graphics.frame_begin().await;
-
-                // run sequentially until we get secondary command buffers up and running
-                self.systems.gfx_camera.render().await;
-                self.systems.gfx_static_mesh.render().await;
-
+                self.systems.graphics.render().await;
                 self.graphics.frame_end().await;
             };
 
             run_parallel([&mut simulation, &mut graphics]).await;
         };
 
-        // println!("{}", std::mem::size_of_val(&frame_task));
-
-        self.task_executor.execute_blocking(&mut frame_task);
+        self.task_executor.execute_blocking(&mut render);
     }
 
     fn load_level(&mut self) {
@@ -138,7 +141,7 @@ impl Client {
             .push(entity::static_mesh(10, &mut self.systems, static_mesh));
         self.entities.push(entity::camera(20, &mut self.systems));
 
-        self.systems.sim_camera.set_target(10);
+        self.systems.simulation.camera.set_target(10);
     }
 
     fn shutdown(&mut self) {
@@ -160,32 +163,88 @@ impl EventListener for Client {
 
 pub struct Systems {
     pub input: input::System,
-    pub sim_camera: sim_camera::System,
-    pub sim_network_client: sim_network_client::System,
-    pub sim_physics: sim_physics::System,
-    pub gfx_camera: gfx_camera::System,
-    pub gfx_static_mesh: gfx_static_mesh::System,
+    pub simulation: SimulationSystems,
+    pub graphics: GraphicsSystems,
 }
 
 impl Systems {
     pub fn new() -> Self {
         Self {
             input: input::System::new(),
-            sim_camera: sim_camera::System::new(),
-            sim_network_client: sim_network_client::System::new(),
-            sim_physics: sim_physics::System::new(),
-            gfx_camera: gfx_camera::System::new(),
-            gfx_static_mesh: gfx_static_mesh::System::new(),
+            simulation: SimulationSystems::new(),
+            graphics: GraphicsSystems::new(),
         }
     }
 }
 
 impl EventListener for Systems {
     fn receive_event(&mut self, entity_id: EntityId, component: &Component) {
-        self.sim_camera.receive_event(entity_id, component);
-        self.sim_network_client.receive_event(entity_id, component);
-        self.sim_physics.receive_event(entity_id, component);
-        self.gfx_camera.receive_event(entity_id, component);
-        self.gfx_static_mesh.receive_event(entity_id, component);
+        self.simulation.receive_event(entity_id, component);
+        self.graphics.receive_event(entity_id, component);
+    }
+}
+
+pub struct SimulationSystems {
+    pub camera: sim_camera::System,
+    pub network_client: sim_network_client::System,
+    pub physics: sim_physics::System,
+}
+
+impl SimulationSystems {
+    pub fn new() -> Self {
+        Self {
+            camera: sim_camera::System::new(),
+            network_client: sim_network_client::System::new(),
+            physics: sim_physics::System::new(),
+        }
+    }
+
+    pub async fn simulate(&mut self, timestamp: Timestamp) {
+        let mut network_client = self.network_client.simulate(timestamp);
+        let mut physics = self.physics.simulate(timestamp);
+
+        run_parallel([&mut network_client, &mut physics]).await;
+    }
+
+    pub async fn render(&mut self, delta_time: f32, frame_interp: f32) {
+        let mut camera = self.camera.render(delta_time);
+        let mut physics = self.physics.render(frame_interp);
+
+        run_parallel([&mut camera, &mut physics]).await;
+    }
+}
+
+impl EventListener for SimulationSystems {
+    fn receive_event(&mut self, entity_id: EntityId, component: &Component) {
+        self.camera.receive_event(entity_id, component);
+        self.network_client.receive_event(entity_id, component);
+        self.physics.receive_event(entity_id, component);
+    }
+}
+
+pub struct GraphicsSystems {
+    pub camera: gfx_camera::System,
+    pub static_mesh: gfx_static_mesh::System,
+}
+
+impl GraphicsSystems {
+    pub fn new() -> Self {
+        Self {
+            camera: gfx_camera::System::new(),
+            static_mesh: gfx_static_mesh::System::new(),
+        }
+    }
+
+    pub async fn render(&mut self) {
+        // run sequentially until we get secondary command buffers up and running
+        self.camera.render().await;
+        self.static_mesh.render().await;
+    }
+}
+
+impl EventListener for GraphicsSystems {
+    fn receive_event(&mut self, entity_id: EntityId, component: &Component) {
+        self.camera.receive_event(entity_id, component);
+        self.static_mesh.receive_event(entity_id, component);
     }
 }

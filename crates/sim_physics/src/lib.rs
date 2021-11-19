@@ -7,7 +7,7 @@ use event::{push_event, EventListener};
 use nalgebra_glm::{vec2_to_vec3, Vec3};
 use network_utils::NETWORK_SNAPSHOTS_LEN;
 use system::{Timestamp, TIMESTEP_F32};
-use task::run_slice;
+use task::{run_slice, run_slice_mut};
 
 #[derive(Clone, Copy, Default)]
 struct Object {
@@ -60,7 +60,7 @@ impl System {
             (self.current_timestamp - Wrapping(1)).0 as usize % NETWORK_SNAPSHOTS_LEN;
         let snapshot_index = self.current_timestamp.0 as usize % NETWORK_SNAPSHOTS_LEN;
 
-        run_slice(self.objects.as_mut_slice(), |object| {
+        run_slice_mut(self.objects.as_mut_slice(), |object| {
             let prev_location = object.data[prev_snapshot_index].location;
             let prev_velocity = object.data[prev_snapshot_index].velocity;
             object.data[snapshot_index].velocity = prev_velocity;
@@ -75,6 +75,22 @@ impl System {
                 object.entity_id,
                 Component::Velocity(object.data[snapshot_index].velocity),
             );
+        })
+        .await;
+    }
+
+    pub async fn render(&self, frame_interp: f32) {
+        let prev_snapshot_index =
+            (self.current_timestamp - Wrapping(1)).0 as usize % NETWORK_SNAPSHOTS_LEN;
+        let snapshot_index = self.current_timestamp.0 as usize % NETWORK_SNAPSHOTS_LEN;
+
+        run_slice(self.objects.as_slice(), |object| {
+            let prev_location = &object.data[prev_snapshot_index].location;
+            let location = &object.data[snapshot_index].location;
+
+            let interp_location = (1.0 - frame_interp) * prev_location + frame_interp * location;
+
+            push_event(object.entity_id, Component::RenderLocation(interp_location));
         })
         .await;
     }

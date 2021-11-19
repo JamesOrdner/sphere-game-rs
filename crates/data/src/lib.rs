@@ -50,6 +50,10 @@ impl<T> ComponentArray<T> {
         self.map.contains_key(&entity_id)
     }
 
+    pub fn as_slice(&self) -> &[DataEntry<T>] {
+        self.data.as_slice()
+    }
+
     pub fn as_mut_slice(&mut self) -> &mut [DataEntry<T>] {
         self.data.as_mut_slice()
     }

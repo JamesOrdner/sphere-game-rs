@@ -37,14 +37,14 @@ impl System {
     }
 
     pub async fn render(&mut self) {
-        run_slice(self.components.as_mut_slice(), |component| {
+        run_slice(self.components.as_slice(), |component| {
             let gfx_delegate = gfx_delegate();
             let model_matrix = translate(&Mat4::identity(), &component.data.location);
             gfx_delegate.update_static_mesh(&component.data.static_mesh, model_matrix);
         })
         .await;
 
-        run_slice(self.components.as_mut_slice(), |component| {
+        run_slice(self.components.as_slice(), |component| {
             let gfx_delegate = gfx_delegate();
             gfx_delegate.draw_instance(&component.data.static_mesh);
         })
@@ -58,7 +58,7 @@ impl EventListener for System {
             return;
         }
 
-        if let Component::Location(location) = component {
+        if let Component::RenderLocation(location) = component {
             self.components[entity_id].data.location = *location;
         }
     }
