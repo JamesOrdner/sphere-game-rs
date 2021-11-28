@@ -6,7 +6,7 @@ use event::{push_event, EventListener};
 use laminar::{Packet, Socket, SocketEvent};
 use nalgebra_glm::{Vec2, Vec3};
 use network_utils::{
-    InputPacket, NetworkId, PacketType, ServerConnectPacket, StaticMeshPacket, VelocityPacket,
+    ConnectPacket, InputPacket, NetworkId, PacketType, StaticMeshPacket, VelocityPacket,
 };
 use system::Timestamp;
 
@@ -49,7 +49,7 @@ impl System {
             .retain(|_, static_mesh| static_mesh.entity_id != entity_id);
     }
 
-    pub async fn simulate(&mut self, _timestamp: Timestamp) {
+    pub async fn simulate(&mut self, timestamp: Timestamp) {
         let input = InputPacket::new(self.input);
 
         self.socket
@@ -64,7 +64,7 @@ impl System {
 
         while let Some(message) = self.socket.recv() {
             match message {
-                SocketEvent::Packet(packet) => self.handle_packet(packet.payload()),
+                SocketEvent::Packet(packet) => self.handle_packet(packet.payload(), timestamp),
                 SocketEvent::Connect(_) => println!("client connect"),
                 SocketEvent::Timeout(_) => println!("client timeout"),
                 SocketEvent::Disconnect(_) => println!("client disconnect"),
@@ -72,19 +72,24 @@ impl System {
         }
     }
 
-    fn handle_packet(&mut self, packet: &[u8]) {
+    fn handle_packet(&mut self, packet: &[u8], timestamp: Timestamp) {
         match PacketType::from(packet) {
             PacketType::Input => {}
-            PacketType::ServerConnect => self.handle_server_connect(packet),
+            PacketType::Connect => self.handle_connect(timestamp),
             PacketType::StaticMesh => self.handle_static_mesh_packet(packet),
             PacketType::Velocity => self.handle_velocity_packet(packet),
         };
     }
 
-    fn handle_server_connect(&mut self, packet: &[u8]) {
-        let packet = ServerConnectPacket::from(packet);
+    fn handle_connect(&mut self, timestamp: Timestamp) {
+        let packet = ConnectPacket::new(timestamp);
 
-        push_event(0, Component::Timestamp(packet.timestamp));
+        self.socket
+            .send(Packet::reliable_unordered(
+                SERVER.parse().unwrap(),
+                packet.into(),
+            ))
+            .unwrap();
     }
 
     fn handle_static_mesh_packet(&mut self, packet: &[u8]) {

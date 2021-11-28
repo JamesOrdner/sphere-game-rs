@@ -1,7 +1,9 @@
 use std::{
     collections::HashMap,
     net::SocketAddr,
+    num::Wrapping,
     thread::{self, JoinHandle},
+    time::{Duration, Instant},
 };
 
 use component::Component;
@@ -11,7 +13,7 @@ use event::{push_event, EventListener};
 use laminar::{Packet, Socket, SocketEvent};
 use nalgebra_glm::{Vec2, Vec3};
 use network_utils::{
-    InputPacket, NetworkId, PacketType, ServerConnectPacket, StaticMeshPacket, VelocityPacket,
+    ConnectPacket, InputPacket, NetworkId, PacketType, StaticMeshPacket, VelocityPacket,
 };
 use system::Timestamp;
 
@@ -29,14 +31,18 @@ pub struct System {
 
 struct Client {
     addr: SocketAddr,
-    input: Vec2,
+    timestamp_offset: Timestamp,
+    last_revc_instant: Instant,
+    ping: Duration,
 }
 
 impl Client {
     fn new(addr: SocketAddr) -> Self {
         Self {
             addr,
-            input: Vec2::zeros(),
+            timestamp_offset: Wrapping(0),
+            last_revc_instant: Instant::now(),
+            ping: Duration::ZERO,
         }
     }
 }
@@ -109,7 +115,7 @@ impl System {
         while let Ok(msg) = self.receiver.try_recv() {
             match msg {
                 SocketEvent::Packet(packet) => self.handle_packet(&packet, timestamp),
-                SocketEvent::Connect(addr) => self.clients.push(Client::new(addr)),
+                SocketEvent::Connect(addr) => self.handle_client_connect(addr),
                 SocketEvent::Timeout(_) => println!("timeout"),
                 SocketEvent::Disconnect(addr) => self.clients.retain(|a| a.addr != addr),
             }
@@ -143,38 +149,58 @@ impl System {
         }
     }
 
+    fn handle_client_connect(&mut self, addr: SocketAddr) {
+        self.clients.push(Client::new(addr));
+
+        let packet = ConnectPacket::new(Wrapping(0));
+        let msg = Packet::reliable_unordered(addr, packet.into());
+        self.sender.send(msg).unwrap();
+    }
+
     fn handle_packet(&mut self, packet: &Packet, timestamp: Timestamp) {
         let payload = packet.payload();
         match PacketType::from(payload) {
             PacketType::Input => self.handle_input_packet(packet),
-            PacketType::ServerConnect => panic!(),
+            PacketType::Connect => self.handle_connect(packet, timestamp),
             PacketType::StaticMesh => panic!(),
             PacketType::Velocity => panic!(),
         };
 
         if !self.clients.iter().any(|a| a.addr == packet.addr()) {
             self.sender
-                .send(Packet::reliable_ordered(
+                .send(Packet::reliable_unordered(
                     packet.addr(),
-                    ServerConnectPacket::new(timestamp).into(),
-                    None,
+                    ConnectPacket::new(Wrapping(0)).into(),
                 ))
                 .unwrap();
         }
     }
 
+    fn handle_connect(&mut self, packet: &Packet, timestamp: Timestamp) {
+        let addr = packet.addr();
+        let packet = ConnectPacket::from(packet.payload());
+
+        let client = self.clients.iter_mut().find(|c| c.addr == addr).unwrap();
+
+        let now = Instant::now();
+        client.ping = now.duration_since(client.last_revc_instant);
+        client.timestamp_offset = packet.timestamp - timestamp;
+
+        println!("{}", client.ping.as_millis());
+    }
+
     fn handle_input_packet(&mut self, packet: &Packet) {
         // hack: only allow first client to send input
         let controller_client_addr = match self.clients.first() {
-            Some(Client { addr, input: _ }) => addr,
+            Some(client) => client.addr,
             _ => return,
         };
 
-        if *controller_client_addr == packet.addr() {
+        if controller_client_addr == packet.addr() {
             let packet = InputPacket::from(packet.payload());
             push_event(0, Component::InputAcceleration(packet.input));
 
-            // todo: send immediate velocity update to all clients
+            // todo: send immediate input update to all clients
         }
     }
 }

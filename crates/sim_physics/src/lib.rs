@@ -19,7 +19,6 @@ pub struct System {
     objects: ComponentArray<[Object; NETWORK_SNAPSHOTS_LEN]>,
     current_timestamp: Timestamp,
     correct_from_timestamp: Option<Timestamp>,
-    has_input: bool, // hax
 }
 
 impl System {
@@ -28,7 +27,6 @@ impl System {
             objects: ComponentArray::new(),
             current_timestamp: Wrapping(0),
             correct_from_timestamp: None,
-            has_input: true,
         }
     }
 
@@ -104,10 +102,6 @@ impl EventListener for System {
 
         match component {
             Component::InputAcceleration(acceleration) => {
-                if !self.has_input {
-                    return;
-                }
-
                 let timestamp_index = self.current_timestamp.0 as usize % NETWORK_SNAPSHOTS_LEN;
                 for component in &mut self.objects {
                     component.data[timestamp_index].velocity = vec2_to_vec3(acceleration);
@@ -141,12 +135,6 @@ impl EventListener for System {
                         // todo: falls apart if multiple corrections at different timestamps
                         self.correct_from_timestamp = Some(*timestamp);
                     }
-                }
-            }
-            Component::Timestamp(timestamp) => {
-                self.current_timestamp = *timestamp;
-                if timestamp.0 > 60 {
-                    self.has_input = false;
                 }
             }
             _ => {}

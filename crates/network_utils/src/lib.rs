@@ -9,7 +9,7 @@ pub const NETWORK_SNAPSHOTS_LEN: usize = STEPS_PER_SECOND;
 #[derive(Serialize, Deserialize)]
 pub enum PacketType {
     Input,
-    ServerConnect,
+    Connect,
     StaticMesh,
     Velocity,
 }
@@ -48,27 +48,27 @@ impl Into<Vec<u8>> for InputPacket {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct ServerConnectPacket {
+pub struct ConnectPacket {
     packet_type: PacketType,
     pub timestamp: Timestamp,
 }
 
-impl ServerConnectPacket {
+impl ConnectPacket {
     pub fn new(timestamp: Timestamp) -> Self {
         Self {
-            packet_type: PacketType::ServerConnect,
+            packet_type: PacketType::Connect,
             timestamp,
         }
     }
 }
 
-impl From<&[u8]> for ServerConnectPacket {
+impl From<&[u8]> for ConnectPacket {
     fn from(data: &[u8]) -> Self {
         bincode::deserialize(data).unwrap()
     }
 }
 
-impl Into<Vec<u8>> for ServerConnectPacket {
+impl Into<Vec<u8>> for ConnectPacket {
     fn into(self) -> Vec<u8> {
         bincode::serialize(&self).unwrap()
     }

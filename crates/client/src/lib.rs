@@ -81,11 +81,6 @@ impl Client {
 
     fn distribute_events(&mut self) {
         self.event_manager.distribute(|entity_id, component| {
-            if let Component::Timestamp(timestamp) = component {
-                // + 2 as super basic server tick position estimate
-                self.timestamp = timestamp + Wrapping(2);
-            }
-
             self.systems.receive_event(entity_id, component);
         });
     }
@@ -153,10 +148,6 @@ impl Client {
 
 impl EventListener for Client {
     fn receive_event(&mut self, entity_id: EntityId, component: &Component) {
-        if let Component::Timestamp(timestamp) = component {
-            self.timestamp = *timestamp;
-        }
-
         self.systems.receive_event(entity_id, component);
     }
 }
