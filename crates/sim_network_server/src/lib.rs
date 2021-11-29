@@ -10,10 +10,10 @@ use component::Component;
 use crossbeam_channel::{Receiver, Sender};
 use entity::EntityId;
 use event::{push_event, EventListener};
-use laminar::{Packet, Socket, SocketEvent};
-use nalgebra_glm::{Vec2, Vec3};
+use laminar::{Packet as LaminarPacket, Socket, SocketEvent};
+use nalgebra_glm::Vec3;
 use network_utils::{
-    ConnectPacket, InputPacket, NetworkId, PacketType, StaticMeshPacket, VelocityPacket,
+    InputPacket, NetworkId, Packet, PingPacket, StaticMeshPacket, TimestampOffset, VelocityPacket,
 };
 use system::Timestamp;
 
@@ -23,7 +23,7 @@ const TIMESTEPS_PER_CLIENT_UPDATE: usize = 6;
 
 pub struct System {
     _socket_thread_join: JoinHandle<()>,
-    sender: Sender<Packet>,
+    sender: Sender<LaminarPacket>,
     receiver: Receiver<SocketEvent>,
     clients: Vec<Client>,
     static_mesh_components: HashMap<NetworkId, StaticMeshComponent>,
@@ -115,7 +115,7 @@ impl System {
         while let Ok(msg) = self.receiver.try_recv() {
             match msg {
                 SocketEvent::Packet(packet) => self.handle_packet(&packet, timestamp),
-                SocketEvent::Connect(addr) => self.handle_client_connect(addr),
+                SocketEvent::Connect(addr) => self.handle_connect(addr),
                 SocketEvent::Timeout(_) => println!("timeout"),
                 SocketEvent::Disconnect(addr) => self.clients.retain(|a| a.addr != addr),
             }
@@ -126,14 +126,14 @@ impl System {
         if timestamp.0 % TIMESTEPS_PER_CLIENT_UPDATE as u32 == 0 {
             // full update
             for (network_id, static_mesh) in &mut self.static_mesh_components {
-                let packet = StaticMeshPacket::new(
+                let packet = StaticMeshPacket {
                     timestamp,
-                    *network_id,
-                    static_mesh.location,
-                    static_mesh.velocity,
-                );
+                    network_id: *network_id,
+                    location: static_mesh.location,
+                    velocity: static_mesh.velocity,
+                };
                 static_mesh.velocity_updated = false;
-                send_to_clients(&self.sender, &self.clients, packet.into());
+                send_to_clients(&self.sender, &self.clients, packet);
             }
         } else {
             // send only velocities
@@ -143,43 +143,53 @@ impl System {
                     static_mesh.updated_velocity().map(|vel| (network_id, vel))
                 })
                 .for_each(|(network_id, velocity)| {
-                    let packet = VelocityPacket::new(timestamp, *network_id, *velocity);
-                    send_to_clients(&self.sender, &self.clients, packet.into());
+                    let packet = VelocityPacket {
+                        timestamp,
+                        network_id: *network_id,
+                        velocity: *velocity,
+                    };
+                    send_to_clients(&self.sender, &self.clients, packet);
                 });
         }
     }
 
-    fn handle_client_connect(&mut self, addr: SocketAddr) {
-        self.clients.push(Client::new(addr));
+    fn handle_connect(&mut self, addr: SocketAddr) {
+        println!("connection established");
 
-        let packet = ConnectPacket::new(Wrapping(0));
-        let msg = Packet::reliable_unordered(addr, packet.into());
+        let mut client = Client::new(addr);
+        client.last_revc_instant = Instant::now();
+        self.clients.push(client);
+
+        let packet = Packet::Ping(PingPacket {
+            timestamp: Wrapping(0),
+        });
+        let msg = LaminarPacket::reliable_unordered(addr, packet.into());
         self.sender.send(msg).unwrap();
     }
 
-    fn handle_packet(&mut self, packet: &Packet, timestamp: Timestamp) {
+    fn handle_packet(&mut self, packet: &LaminarPacket, timestamp: Timestamp) {
         let payload = packet.payload();
-        match PacketType::from(payload) {
-            PacketType::Input => self.handle_input_packet(packet),
-            PacketType::Connect => self.handle_connect(packet, timestamp),
-            PacketType::StaticMesh => panic!(),
-            PacketType::Velocity => panic!(),
+        match Packet::from(payload) {
+            Packet::EstablishConnection => self.handle_establish_connection(packet.addr()),
+            Packet::Input(data) => self.handle_input_packet(data, packet.addr()),
+            Packet::Ping(data) => self.handle_ping(data, packet.addr(), timestamp),
+            Packet::StaticMesh(_) => panic!(),
+            Packet::Velocity(_) => panic!(),
         };
-
-        if !self.clients.iter().any(|a| a.addr == packet.addr()) {
-            self.sender
-                .send(Packet::reliable_unordered(
-                    packet.addr(),
-                    ConnectPacket::new(Wrapping(0)).into(),
-                ))
-                .unwrap();
-        }
     }
 
-    fn handle_connect(&mut self, packet: &Packet, timestamp: Timestamp) {
-        let addr = packet.addr();
-        let packet = ConnectPacket::from(packet.payload());
+    fn handle_establish_connection(&mut self, addr: SocketAddr) {
+        println!("initial client connection request received");
 
+        self.sender
+            .send(LaminarPacket::reliable_unordered(
+                addr,
+                Packet::EstablishConnection.into(),
+            ))
+            .unwrap();
+    }
+
+    fn handle_ping(&mut self, packet: PingPacket, addr: SocketAddr, timestamp: Timestamp) {
         let client = self.clients.iter_mut().find(|c| c.addr == addr).unwrap();
 
         let now = Instant::now();
@@ -189,15 +199,14 @@ impl System {
         println!("{}", client.ping.as_millis());
     }
 
-    fn handle_input_packet(&mut self, packet: &Packet) {
+    fn handle_input_packet(&mut self, packet: InputPacket, addr: SocketAddr) {
         // hack: only allow first client to send input
         let controller_client_addr = match self.clients.first() {
             Some(client) => client.addr,
             _ => return,
         };
 
-        if controller_client_addr == packet.addr() {
-            let packet = InputPacket::from(packet.payload());
+        if controller_client_addr == addr {
             push_event(0, Component::InputAcceleration(packet.input));
 
             // todo: send immediate input update to all clients
@@ -205,12 +214,18 @@ impl System {
     }
 }
 
-fn send_to_clients(sender: &Sender<Packet>, clients: &[Client], packet: Vec<u8>) {
+fn send_to_clients<P>(sender: &Sender<LaminarPacket>, clients: &[Client], data: P)
+where
+    P: Copy + TimestampOffset + Into<Packet>,
+{
     for client in clients {
+        let mut data = data.clone();
+        data.add_client_offset(client.timestamp_offset);
+
         sender
-            .send(Packet::reliable_sequenced(
+            .send(LaminarPacket::reliable_sequenced(
                 client.addr,
-                packet.clone(),
+                data.into().into(),
                 None,
             ))
             .unwrap();

@@ -6,139 +6,82 @@ pub type NetworkId = u16;
 
 pub const NETWORK_SNAPSHOTS_LEN: usize = STEPS_PER_SECOND;
 
-#[derive(Serialize, Deserialize)]
-pub enum PacketType {
-    Input,
-    Connect,
-    StaticMesh,
-    Velocity,
+pub trait TimestampOffset {
+    fn add_client_offset(&mut self, offset: Timestamp);
 }
 
-impl From<&[u8]> for PacketType {
+#[derive(Serialize, Deserialize)]
+pub enum Packet {
+    EstablishConnection,
+    Input(InputPacket),
+    Ping(PingPacket),
+    StaticMesh(StaticMeshPacket),
+    Velocity(VelocityPacket),
+}
+
+impl From<&[u8]> for Packet {
     fn from(data: &[u8]) -> Self {
         bincode::deserialize(data).unwrap()
     }
 }
 
-#[derive(Serialize, Deserialize)]
+impl Into<Vec<u8>> for Packet {
+    fn into(self) -> Vec<u8> {
+        bincode::serialize(&self).unwrap()
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy)]
 pub struct InputPacket {
-    packet_type: PacketType,
     pub input: Vec2,
 }
 
-impl InputPacket {
-    pub fn new(input: Vec2) -> Self {
-        Self {
-            packet_type: PacketType::Input,
-            input,
-        }
-    }
-}
-
-impl From<&[u8]> for InputPacket {
-    fn from(data: &[u8]) -> Self {
-        bincode::deserialize(data).unwrap()
-    }
-}
-
-impl Into<Vec<u8>> for InputPacket {
-    fn into(self) -> Vec<u8> {
-        bincode::serialize(&self).unwrap()
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct ConnectPacket {
-    packet_type: PacketType,
+#[derive(Serialize, Deserialize, Clone, Copy)]
+pub struct PingPacket {
     pub timestamp: Timestamp,
 }
 
-impl ConnectPacket {
-    pub fn new(timestamp: Timestamp) -> Self {
-        Self {
-            packet_type: PacketType::Connect,
-            timestamp,
-        }
+impl Into<Packet> for PingPacket {
+    fn into(self) -> Packet {
+        Packet::Ping(self)
     }
 }
 
-impl From<&[u8]> for ConnectPacket {
-    fn from(data: &[u8]) -> Self {
-        bincode::deserialize(data).unwrap()
-    }
-}
-
-impl Into<Vec<u8>> for ConnectPacket {
-    fn into(self) -> Vec<u8> {
-        bincode::serialize(&self).unwrap()
-    }
-}
-
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Copy)]
 pub struct StaticMeshPacket {
-    packet_type: PacketType,
     pub timestamp: Timestamp,
     pub network_id: NetworkId,
     pub location: Vec3,
     pub velocity: Vec3,
 }
 
-impl StaticMeshPacket {
-    pub fn new(
-        timestamp: Timestamp,
-        network_id: NetworkId,
-        location: Vec3,
-        velocity: Vec3,
-    ) -> Self {
-        Self {
-            packet_type: PacketType::StaticMesh,
-            timestamp,
-            network_id,
-            location,
-            velocity,
-        }
+impl Into<Packet> for StaticMeshPacket {
+    fn into(self) -> Packet {
+        Packet::StaticMesh(self)
     }
 }
 
-impl From<&[u8]> for StaticMeshPacket {
-    fn from(data: &[u8]) -> Self {
-        bincode::deserialize(data).unwrap()
+impl TimestampOffset for StaticMeshPacket {
+    fn add_client_offset(&mut self, offset: Timestamp) {
+        self.timestamp += offset;
     }
 }
 
-impl Into<Vec<u8>> for StaticMeshPacket {
-    fn into(self) -> Vec<u8> {
-        bincode::serialize(&self).unwrap()
-    }
-}
-
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Copy)]
 pub struct VelocityPacket {
-    packet_type: PacketType,
     pub timestamp: Timestamp,
     pub network_id: NetworkId,
     pub velocity: Vec3,
 }
 
-impl VelocityPacket {
-    pub fn new(timestamp: Timestamp, network_id: NetworkId, velocity: Vec3) -> Self {
-        Self {
-            packet_type: PacketType::Velocity,
-            timestamp,
-            network_id,
-            velocity,
-        }
+impl TimestampOffset for VelocityPacket {
+    fn add_client_offset(&mut self, offset: Timestamp) {
+        self.timestamp += offset;
     }
 }
 
-impl From<&[u8]> for VelocityPacket {
-    fn from(data: &[u8]) -> Self {
-        bincode::deserialize(data).unwrap()
-    }
-}
-
-impl Into<Vec<u8>> for VelocityPacket {
-    fn into(self) -> Vec<u8> {
-        bincode::serialize(&self).unwrap()
+impl Into<Packet> for VelocityPacket {
+    fn into(self) -> Packet {
+        Packet::Velocity(self)
     }
 }

@@ -1,19 +1,19 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, net::SocketAddr};
 
 use component::Component;
 use entity::EntityId;
 use event::{push_event, EventListener};
-use laminar::{Packet, Socket, SocketEvent};
+use laminar::{Packet as LaminarPacket, Socket, SocketEvent};
 use nalgebra_glm::{Vec2, Vec3};
-use network_utils::{
-    ConnectPacket, InputPacket, NetworkId, PacketType, StaticMeshPacket, VelocityPacket,
-};
+use network_utils::{InputPacket, NetworkId, Packet, PingPacket, StaticMeshPacket, VelocityPacket};
 use system::Timestamp;
 
-const SERVER: &str = "127.0.0.1:12351";
+const SERVER_IP: &str = "127.0.0.1:12351";
 
 pub struct System {
     socket: Socket,
+    server_addr: SocketAddr,
+    connected: bool,
     input: Vec2,
     static_mesh_components: HashMap<NetworkId, StaticMeshComponent>,
 }
@@ -25,10 +25,22 @@ struct StaticMeshComponent {
 
 impl System {
     pub fn new() -> Self {
-        let socket = Socket::bind("127.0.0.1:0").unwrap();
+        let mut socket = Socket::bind("127.0.0.1:0").unwrap();
+        let server_addr = SERVER_IP.parse().unwrap();
+
+        // send initial connect packet to server
+        socket
+            .send(LaminarPacket::reliable_unordered(
+                server_addr,
+                Packet::EstablishConnection.into(),
+            ))
+            .unwrap();
+        socket.manual_poll(std::time::Instant::now());
 
         Self {
             socket,
+            server_addr,
+            connected: false,
             input: Vec2::zeros(),
             static_mesh_components: HashMap::new(),
         }
@@ -50,50 +62,51 @@ impl System {
     }
 
     pub async fn simulate(&mut self, timestamp: Timestamp) {
-        let input = InputPacket::new(self.input);
-
-        self.socket
-            .send(Packet::reliable_sequenced(
-                SERVER.parse().unwrap(),
-                input.into(),
-                None,
-            ))
-            .unwrap();
+        if self.connected {
+            let input = Packet::Input(InputPacket { input: self.input });
+            self.socket
+                .send(LaminarPacket::reliable_sequenced(
+                    self.server_addr,
+                    input.into(),
+                    None,
+                ))
+                .unwrap();
+        }
 
         self.socket.manual_poll(std::time::Instant::now());
 
         while let Some(message) = self.socket.recv() {
             match message {
                 SocketEvent::Packet(packet) => self.handle_packet(packet.payload(), timestamp),
-                SocketEvent::Connect(_) => println!("client connect"),
+                SocketEvent::Connect(_) => self.handle_connect(),
                 SocketEvent::Timeout(_) => println!("client timeout"),
                 SocketEvent::Disconnect(_) => println!("client disconnect"),
             }
         }
     }
 
+    fn handle_connect(&mut self) {
+        println!("connection established");
+        self.connected = true;
+    }
+
     fn handle_packet(&mut self, packet: &[u8], timestamp: Timestamp) {
-        match PacketType::from(packet) {
-            PacketType::Input => {}
-            PacketType::Connect => self.handle_connect(timestamp),
-            PacketType::StaticMesh => self.handle_static_mesh_packet(packet),
-            PacketType::Velocity => self.handle_velocity_packet(packet),
+        match Packet::from(packet) {
+            Packet::EstablishConnection => {}
+            Packet::Ping(_) => self.handle_ping(timestamp),
+            Packet::Input(_) => panic!(),
+            Packet::StaticMesh(data) => self.handle_static_mesh_packet(data),
+            Packet::Velocity(data) => self.handle_velocity_packet(data),
         };
     }
 
-    fn handle_connect(&mut self, timestamp: Timestamp) {
-        let packet = ConnectPacket::new(timestamp);
-
-        self.socket
-            .send(Packet::reliable_unordered(
-                SERVER.parse().unwrap(),
-                packet.into(),
-            ))
-            .unwrap();
+    fn handle_ping(&mut self, timestamp: Timestamp) {
+        let packet = Packet::Ping(PingPacket { timestamp });
+        let msg = LaminarPacket::reliable_unordered(self.server_addr, packet.into());
+        self.socket.send(msg).unwrap();
     }
 
-    fn handle_static_mesh_packet(&mut self, packet: &[u8]) {
-        let packet = StaticMeshPacket::from(packet);
+    fn handle_static_mesh_packet(&mut self, packet: StaticMeshPacket) {
         let static_mesh = self
             .static_mesh_components
             .get_mut(&packet.network_id)
@@ -117,8 +130,7 @@ impl System {
         );
     }
 
-    fn handle_velocity_packet(&mut self, packet: &[u8]) {
-        let packet = VelocityPacket::from(packet);
+    fn handle_velocity_packet(&mut self, packet: VelocityPacket) {
         let static_mesh = self
             .static_mesh_components
             .get_mut(&packet.network_id)
