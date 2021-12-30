@@ -107,6 +107,14 @@ impl EventListener for System {
                     component.data[timestamp_index].velocity = vec2_to_vec3(acceleration);
                 }
             }
+            Component::NetInputAcceleration {
+                timestamp,
+                acceleration,
+            } => {
+                let timestamp_index = timestamp.0 as usize % NETWORK_SNAPSHOTS_LEN;
+                self.objects[entity_id].data[timestamp_index].velocity = vec2_to_vec3(acceleration);
+                self.correct_from_timestamp = Some(*timestamp);
+            }
             Component::NetStaticMeshLocation {
                 timestamp,
                 location,

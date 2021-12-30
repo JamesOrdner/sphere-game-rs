@@ -15,7 +15,7 @@ use nalgebra_glm::Vec3;
 use network_utils::{
     InputPacket, NetworkId, Packet, PingPacket, StaticMeshPacket, TimestampOffset, VelocityPacket,
 };
-use system::Timestamp;
+use system::{Timestamp, TIMESTEP_F32};
 
 const SERVER: &str = "127.0.0.1:12351";
 
@@ -32,8 +32,9 @@ pub struct System {
 struct Client {
     addr: SocketAddr,
     timestamp_offset: Timestamp,
-    last_revc_instant: Instant,
+    last_recv_instant: Instant,
     ping: Duration,
+    ping_timestamps: Timestamp,
 }
 
 impl Client {
@@ -41,8 +42,9 @@ impl Client {
         Self {
             addr,
             timestamp_offset: Wrapping(0),
-            last_revc_instant: Instant::now(),
+            last_recv_instant: Instant::now(),
             ping: Duration::ZERO,
+            ping_timestamps: Wrapping(0),
         }
     }
 }
@@ -157,7 +159,7 @@ impl System {
         println!("connection established");
 
         let mut client = Client::new(addr);
-        client.last_revc_instant = Instant::now();
+        client.last_recv_instant = Instant::now();
         self.clients.push(client);
 
         let packet = Packet::Ping(PingPacket {
@@ -171,7 +173,7 @@ impl System {
         let payload = packet.payload();
         match Packet::from(payload) {
             Packet::EstablishConnection => self.handle_establish_connection(packet.addr()),
-            Packet::Input(data) => self.handle_input_packet(data, packet.addr()),
+            Packet::Input(data) => self.handle_input_packet(data, packet.addr(), timestamp),
             Packet::Ping(data) => self.handle_ping(data, packet.addr(), timestamp),
             Packet::StaticMesh(_) => panic!(),
             Packet::Velocity(_) => panic!(),
@@ -193,21 +195,28 @@ impl System {
         let client = self.clients.iter_mut().find(|c| c.addr == addr).unwrap();
 
         let now = Instant::now();
-        client.ping = now.duration_since(client.last_revc_instant);
-        client.timestamp_offset = packet.timestamp - timestamp;
+        client.ping = now.duration_since(client.last_recv_instant);
+        client.ping_timestamps =
+            Wrapping((client.ping.as_secs_f32() / TIMESTEP_F32).round() as u32 / 2);
 
-        println!("{}", client.ping.as_millis());
+        client.timestamp_offset = packet.timestamp - timestamp - client.ping_timestamps;
     }
 
-    fn handle_input_packet(&mut self, packet: InputPacket, addr: SocketAddr) {
+    fn handle_input_packet(&mut self, packet: InputPacket, addr: SocketAddr, timestamp: Timestamp) {
         // hack: only allow first client to send input
-        let controller_client_addr = match self.clients.first() {
-            Some(client) => client.addr,
+        let client = match self.clients.first() {
+            Some(client) => client,
             _ => return,
         };
 
-        if controller_client_addr == addr {
-            push_event(0, Component::InputAcceleration(packet.input));
+        if client.addr == addr {
+            push_event(
+                0,
+                Component::NetInputAcceleration {
+                    timestamp: timestamp - client.ping_timestamps,
+                    acceleration: packet.input,
+                },
+            );
 
             // todo: send immediate input update to all clients
         }
@@ -219,7 +228,7 @@ where
     P: Copy + TimestampOffset + Into<Packet>,
 {
     for client in clients {
-        let mut data = data.clone();
+        let mut data = data;
         data.add_client_offset(client.timestamp_offset);
 
         sender

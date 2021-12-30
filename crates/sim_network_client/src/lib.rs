@@ -25,7 +25,7 @@ struct StaticMeshComponent {
 
 impl System {
     pub fn new() -> Self {
-        let mut socket = Socket::bind("127.0.0.1:0").unwrap();
+        let mut socket = Socket::bind_any().unwrap();
         let server_addr = SERVER_IP.parse().unwrap();
 
         // send initial connect packet to server

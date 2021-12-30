@@ -34,7 +34,7 @@ pub fn new(
     framebuffers
 }
 
-pub unsafe fn destroy(framebuffers: &Vec<vk::Framebuffer>, vulkan: &VulkanInfo) {
+pub unsafe fn destroy(framebuffers: &[vk::Framebuffer], vulkan: &VulkanInfo) {
     for framebuffer in framebuffers {
         vulkan.device.destroy_framebuffer(*framebuffer, None);
     }
