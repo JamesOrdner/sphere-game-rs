@@ -15,6 +15,7 @@ pub struct System {
     server_addr: SocketAddr,
     connected: bool,
     input: Vec2,
+    last_sent_input: Vec2,
     static_mesh_components: HashMap<NetworkId, StaticMeshComponent>,
 }
 
@@ -42,6 +43,7 @@ impl System {
             server_addr,
             connected: false,
             input: Vec2::zeros(),
+            last_sent_input: Vec2::zeros(),
             static_mesh_components: HashMap::new(),
         }
     }
@@ -63,14 +65,22 @@ impl System {
 
     pub async fn simulate(&mut self, timestamp: Timestamp) {
         if self.connected {
-            let input = Packet::Input(InputPacket { input: self.input });
-            self.socket
-                .send(LaminarPacket::reliable_sequenced(
-                    self.server_addr,
-                    input.into(),
-                    None,
-                ))
-                .unwrap();
+            if self.input != self.last_sent_input {
+                self.last_sent_input = self.input;
+
+                let input = Packet::Input(InputPacket {
+                    timestamp,
+                    input: self.input,
+                });
+
+                self.socket
+                    .send(LaminarPacket::reliable_sequenced(
+                        self.server_addr,
+                        input.into(),
+                        None,
+                    ))
+                    .unwrap();
+            }
         }
 
         self.socket.manual_poll(std::time::Instant::now());
@@ -102,7 +112,7 @@ impl System {
 
     fn handle_ping(&mut self, timestamp: Timestamp) {
         let packet = Packet::Ping(PingPacket { timestamp });
-        let msg = LaminarPacket::reliable_unordered(self.server_addr, packet.into());
+        let msg = LaminarPacket::unreliable(self.server_addr, packet.into());
         self.socket.send(msg).unwrap();
     }
 

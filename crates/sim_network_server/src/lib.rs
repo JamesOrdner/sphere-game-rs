@@ -3,7 +3,6 @@ use std::{
     net::SocketAddr,
     num::Wrapping,
     thread::{self, JoinHandle},
-    time::{Duration, Instant},
 };
 
 use component::Component;
@@ -14,8 +13,9 @@ use laminar::{Packet as LaminarPacket, Socket, SocketEvent};
 use nalgebra_glm::Vec3;
 use network_utils::{
     InputPacket, NetworkId, Packet, PingPacket, StaticMeshPacket, TimestampOffset, VelocityPacket,
+    PING_UPDATE_INTERVAL,
 };
-use system::{Timestamp, TIMESTEP_F32};
+use system::Timestamp;
 
 const SERVER: &str = "127.0.0.1:12351";
 
@@ -31,22 +31,9 @@ pub struct System {
 
 struct Client {
     addr: SocketAddr,
+    ping: Timestamp,
+    last_ping_request: Timestamp,
     timestamp_offset: Timestamp,
-    last_recv_instant: Instant,
-    ping: Duration,
-    ping_timestamps: Timestamp,
-}
-
-impl Client {
-    fn new(addr: SocketAddr) -> Self {
-        Self {
-            addr,
-            timestamp_offset: Wrapping(0),
-            last_recv_instant: Instant::now(),
-            ping: Duration::ZERO,
-            ping_timestamps: Wrapping(0),
-        }
-    }
 }
 
 struct StaticMeshComponent {
@@ -118,12 +105,14 @@ impl System {
             match msg {
                 SocketEvent::Packet(packet) => self.handle_packet(&packet, timestamp),
                 SocketEvent::Connect(addr) => self.handle_connect(addr),
-                SocketEvent::Timeout(_) => println!("timeout"),
+                SocketEvent::Timeout(_) => println!("client timeout"),
                 SocketEvent::Disconnect(addr) => self.clients.retain(|a| a.addr != addr),
             }
         }
 
         // send
+
+        self.update_pings(timestamp);
 
         if timestamp.0 % TIMESTEPS_PER_CLIENT_UPDATE as u32 == 0 {
             // full update
@@ -155,20 +144,6 @@ impl System {
         }
     }
 
-    fn handle_connect(&mut self, addr: SocketAddr) {
-        println!("connection established");
-
-        let mut client = Client::new(addr);
-        client.last_recv_instant = Instant::now();
-        self.clients.push(client);
-
-        let packet = Packet::Ping(PingPacket {
-            timestamp: Wrapping(0),
-        });
-        let msg = LaminarPacket::reliable_unordered(addr, packet.into());
-        self.sender.send(msg).unwrap();
-    }
-
     fn handle_packet(&mut self, packet: &LaminarPacket, timestamp: Timestamp) {
         let payload = packet.payload();
         match Packet::from(payload) {
@@ -181,8 +156,7 @@ impl System {
     }
 
     fn handle_establish_connection(&mut self, addr: SocketAddr) {
-        println!("initial client connection request received");
-
+        // return message to establish Laminar connection
         self.sender
             .send(LaminarPacket::reliable_unordered(
                 addr,
@@ -191,15 +165,41 @@ impl System {
             .unwrap();
     }
 
+    fn handle_connect(&mut self, addr: SocketAddr) {
+        println!("connection established");
+
+        self.clients.push(Client {
+            addr,
+            ping: Wrapping(0),
+            last_ping_request: Wrapping(0),
+            timestamp_offset: Wrapping(0),
+        });
+    }
+
+    fn update_pings(&mut self, timestamp: Timestamp) {
+        for client in &mut self.clients {
+            if (timestamp - client.last_ping_request).0 >= PING_UPDATE_INTERVAL {
+                client.last_ping_request = timestamp;
+
+                let ping_packet = PingPacket {
+                    timestamp: Wrapping(0),
+                };
+
+                self.sender
+                    .send(LaminarPacket::unreliable(
+                        client.addr,
+                        Packet::Ping(ping_packet).into(),
+                    ))
+                    .unwrap();
+            }
+        }
+    }
+
     fn handle_ping(&mut self, packet: PingPacket, addr: SocketAddr, timestamp: Timestamp) {
         let client = self.clients.iter_mut().find(|c| c.addr == addr).unwrap();
 
-        let now = Instant::now();
-        client.ping = now.duration_since(client.last_recv_instant);
-        client.ping_timestamps =
-            Wrapping((client.ping.as_secs_f32() / TIMESTEP_F32).round() as u32 / 2);
-
-        client.timestamp_offset = packet.timestamp - timestamp - client.ping_timestamps;
+        client.ping = timestamp - client.last_ping_request;
+        client.timestamp_offset = timestamp - packet.timestamp + Wrapping(client.ping.0 / 2);
     }
 
     fn handle_input_packet(&mut self, packet: InputPacket, addr: SocketAddr, timestamp: Timestamp) {
@@ -213,7 +213,7 @@ impl System {
             push_event(
                 0,
                 Component::NetInputAcceleration {
-                    timestamp: timestamp - client.ping_timestamps,
+                    timestamp: packet.timestamp + client.timestamp_offset,
                     acceleration: packet.input,
                 },
             );
@@ -229,7 +229,7 @@ where
 {
     for client in clients {
         let mut data = data;
-        data.add_client_offset(client.timestamp_offset);
+        data.sub_client_offset(client.timestamp_offset);
 
         sender
             .send(LaminarPacket::reliable_sequenced(

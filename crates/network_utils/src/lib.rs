@@ -6,8 +6,10 @@ pub type NetworkId = u16;
 
 pub const NETWORK_SNAPSHOTS_LEN: usize = STEPS_PER_SECOND;
 
+pub const PING_UPDATE_INTERVAL: u32 = STEPS_PER_SECOND as u32;
+
 pub trait TimestampOffset {
-    fn add_client_offset(&mut self, offset: Timestamp);
+    fn sub_client_offset(&mut self, offset: Timestamp);
 }
 
 #[derive(Serialize, Deserialize)]
@@ -33,6 +35,7 @@ impl Into<Vec<u8>> for Packet {
 
 #[derive(Serialize, Deserialize, Clone, Copy)]
 pub struct InputPacket {
+    pub timestamp: Timestamp,
     pub input: Vec2,
 }
 
@@ -62,8 +65,8 @@ impl Into<Packet> for StaticMeshPacket {
 }
 
 impl TimestampOffset for StaticMeshPacket {
-    fn add_client_offset(&mut self, offset: Timestamp) {
-        self.timestamp += offset;
+    fn sub_client_offset(&mut self, offset: Timestamp) {
+        self.timestamp -= offset;
     }
 }
 
@@ -75,8 +78,8 @@ pub struct VelocityPacket {
 }
 
 impl TimestampOffset for VelocityPacket {
-    fn add_client_offset(&mut self, offset: Timestamp) {
-        self.timestamp += offset;
+    fn sub_client_offset(&mut self, offset: Timestamp) {
+        self.timestamp -= offset;
     }
 }
 
