@@ -1,4 +1,4 @@
-use std::thread::{self, ThreadId};
+use std::{cell::Cell, ptr};
 
 use component::Component;
 use entity::EntityId;
@@ -27,34 +27,32 @@ impl EventSender {
     }
 }
 
-static mut EVENT_SENDERS: Vec<(ThreadId, EventSender)> = Vec::new();
+thread_local! {
+    static EVENT_SENDER: Cell<*mut EventSender> = Cell::new(ptr::null_mut())
+}
+
+static mut EVENT_SENDERS: Vec<EventSender> = Vec::new();
+
+/// SAFETY: must be externally synchronized
+pub unsafe fn add_event_sender() {
+    EVENT_SENDERS.push(EventSender::new());
+    EVENT_SENDER.with(|sender| sender.set(EVENT_SENDERS.last_mut().unwrap()));
+}
 
 pub fn push_event(entity_id: EntityId, component: Component) {
-    let thread_id = thread::current().id();
-
-    unsafe {
-        for event_sender in &mut EVENT_SENDERS {
-            if event_sender.0 == thread_id {
-                event_sender.1.push(entity_id, component);
-                return;
-            }
-        }
-    }
-
-    unreachable!("push_event() called from invalid thread")
+    EVENT_SENDER.with(|sender| unsafe {
+        sender
+            .get()
+            .as_mut()
+            .unwrap_unchecked()
+            .push(entity_id, component)
+    });
 }
 
 pub struct EventManager;
 
 impl EventManager {
-    pub fn new(thread_ids: &[ThreadId]) -> Self {
-        unsafe {
-            EVENT_SENDERS.clear();
-            for thread_id in thread_ids {
-                EVENT_SENDERS.push((*thread_id, EventSender::new()));
-            }
-        }
-
+    pub fn new() -> Self {
         Self {}
     }
 
@@ -64,10 +62,10 @@ impl EventManager {
     {
         unsafe {
             for event_sender in &mut EVENT_SENDERS {
-                for event in &mut event_sender.1.event_queue {
+                for event in &mut event_sender.event_queue {
                     event_handler(event.entity_id, &event.component);
                 }
-                event_sender.1.event_queue.clear();
+                event_sender.event_queue.clear();
             }
         }
     }

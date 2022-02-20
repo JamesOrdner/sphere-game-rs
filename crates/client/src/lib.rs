@@ -32,8 +32,10 @@ impl Client {
     pub fn new(event_loop: &EventLoop<()>) -> Self {
         let window = Window::new(event_loop).unwrap();
 
-        let (task_executor, thread_ids) = Executor::new();
-        let event_manager = EventManager::new(&thread_ids);
+        let event_manager = EventManager::new();
+        let (task_executor, thread_ids) = Executor::new(|| unsafe {
+            event::add_event_sender();
+        });
 
         Self {
             event_manager,

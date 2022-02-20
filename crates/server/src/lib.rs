@@ -1,7 +1,7 @@
 use std::num::Wrapping;
 
 use component::Component;
-use event::{EventListener, EventManager};
+use event::{self, EventListener, EventManager};
 use system::{Timestamp, TIMESTEP};
 use task::{run_parallel, Executor};
 
@@ -20,8 +20,8 @@ pub struct Server {
 
 impl Server {
     pub fn new() -> Self {
-        let (task_executor, thread_ids) = Executor::new();
-        let event_manager = EventManager::new(&thread_ids);
+        let event_manager = EventManager::new();
+        let (task_executor, _) = Executor::new(|| unsafe { event::add_event_sender() });
 
         Self {
             event_manager,

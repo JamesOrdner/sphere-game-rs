@@ -162,27 +162,37 @@ enum ExecutorMessage {
 }
 
 impl Executor {
-    pub fn new() -> (Self, Vec<ThreadId>) {
-        const CPU_COUNT: usize = 4;
+    pub fn new<F>(register_thread: F) -> (Self, Vec<ThreadId>)
+    where
+        F: Fn() + Send + 'static,
+    {
+        const NUM_THREADS: usize = 4;
 
         let main_task = Arc::new(AtomicPtr::new(ptr::null_mut()));
 
         let task_cvar = Arc::new(Condvar::new());
         let task_cvar_mutex = Arc::new(Mutex::new(false));
 
-        let mut thread_join_handles = Vec::with_capacity(CPU_COUNT);
+        let mut thread_join_handles = Vec::with_capacity(NUM_THREADS);
 
         let thread_ids = Mutex::new(Vec::new());
         // SAFETY: we only ever reference this while thread_ids is still in scope
         let thread_ids_ref =
             unsafe { std::mem::transmute::<_, &'static Mutex<Vec<ThreadId>>>(&thread_ids) };
 
-        for _ in 0..CPU_COUNT {
+        let register_thread = Arc::new(Mutex::new(register_thread));
+
+        for _ in 0..NUM_THREADS {
+            let local_register_thread = register_thread.clone();
             let main_task = main_task.clone();
             let task_cvar = task_cvar.clone();
             let task_cvar_mutex = task_cvar_mutex.clone();
             thread_join_handles.push(thread::spawn(move || {
                 thread_ids_ref.lock().unwrap().push(thread::current().id());
+
+                local_register_thread.lock().unwrap()();
+                drop(local_register_thread);
+
                 loop {
                     match SYNC_CHANNEL.receiver.lock().unwrap().recv().unwrap() {
                         ExecutorMessage::Task(task_ptr) => {
@@ -202,7 +212,7 @@ impl Executor {
             }));
         }
 
-        while thread_ids.lock().unwrap().len() < CPU_COUNT {
+        while thread_ids.lock().unwrap().len() < NUM_THREADS {
             std::thread::sleep(std::time::Duration::from_millis(1));
         }
 
